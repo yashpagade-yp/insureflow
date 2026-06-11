@@ -1,0 +1,424 @@
+InsureFlow — Database Models (As Built)
+Last Updated: 2026-06-10
+
+NOTE: This file reflects the ACTUAL implementation, which differs from the
+original spec in a few intentional ways (documented below).
+
+===========================================
+DEVIATIONS FROM ORIGINAL SPEC
+===========================================
+
+1. Auth model REMOVED
+   → OTP state is embedded directly inside the User document.
+   → No separate "auth" collection needed.
+
+2. AddOn model REMOVED (as a separate collection)
+   → Add-ons are embedded inside InsurancePlan as EmbeddedAddOn sub-model.
+   → Plans with no add-ons have available_add_ons = [].
+
+3. Payment MOVED from main_backend to provider_backend
+   → Lives in insureflow_provider database.
+
+4. Quote REDESIGNED
+   → Originally: one document per plan per transaction.
+   → Now: one document per transaction, with items: List[QuoteItem] inside.
+
+5. Notification NOT YET BUILT
+   → Deferred to a later phase (low priority).
+
+6. Application model REMOVED
+   → Replaced by InsuranceDetail model.
+   → Insurance-specific fields will be finalized later.
+
+7. Payment UPDATED
+   → Payment model is still in provider_backend.
+   → Additional payment-field changes are pending final confirmation.
+
+8. Company model ADDED in provider_backend
+   → Used to register external systems/companies for provider API access.
+   → Stores only hashed API keys for secure communication.
+
+
+===========================================
+ENUMS
+===========================================
+
+UserRole {
+    USER   : "USER"    (Customer — login via Mobile + OTP)
+    ADMIN  : "ADMIN"   (Staff — login via Email + Password + OTP)
+}
+
+OtpPurpose {
+    USER_LOGIN  : "user_login"   (OTP sent via SMS to customer mobile)
+    ADMIN_LOGIN : "admin_login"  (OTP sent via Email to admin)
+}
+
+TransactionStatus {
+    FORM_SUBMITTED    : "FORM_SUBMITTED"
+    OFFERS_RECEIVED   : "OFFERS_RECEIVED"
+    OFFER_SELECTED    : "OFFER_SELECTED"
+    ADD_ONS_SELECTED  : "ADD_ONS_SELECTED"
+    OFFER_CONFIRMED   : "OFFER_CONFIRMED"
+    PAYMENT_PENDING   : "PAYMENT_PENDING"
+    PURCHASED         : "PURCHASED"
+    PAYMENT_FAILED    : "PAYMENT_FAILED"
+}
+
+PaymentStatus {
+    PENDING   : "PENDING"
+    SUCCESS   : "SUCCESS"
+    FAILED    : "FAILED"
+}
+
+PolicyStatus {
+    ACTIVE     : "ACTIVE"
+    EXPIRED    : "EXPIRED"
+    CANCELLED  : "CANCELLED"
+}
+
+TicketStatus {
+    OPEN          : "OPEN"
+    IN_PROGRESS   : "IN_PROGRESS"
+    RESOLVED      : "RESOLVED"
+    CLOSED        : "CLOSED"
+}
+
+QuoteStatus {
+    GENERATED   : "GENERATED"
+    SELECTED    : "SELECTED"
+    CONFIRMED   : "CONFIRMED"
+}
+
+Gender {
+    MALE   : "M"
+    FEMALE : "F"
+    OTHER  : "O"
+}
+
+InsuranceType {
+    LIFE    : "life"
+    HEALTH  : "health"
+    GENERAL : "general"
+}
+
+
+===========================================
+EMBEDDED SUB-MODELS (not separate collections)
+===========================================
+
+UserOtp {
+    code_hash                 : String    (hashed OTP — never plain text)
+    purpose                   : OtpPurpose
+    expires_at                : DateTime  (5 min from creation)
+    requested_at              : DateTime
+    attempt_count             : Integer   (default: 0, max: 5)
+    attempt_window_started_at : DateTime
+}
+
+Address {
+    street      : String
+    city        : String
+    state       : String
+    postal_code : String
+    country     : String
+}
+
+StatusHistoryEntry {
+    status    : TransactionStatus
+    timestamp : DateTime
+}
+
+EmbeddedAddOn {
+    name        : String   (e.g. "Accidental Coverage")
+    description : String
+    price       : Float    (extra yearly premium ₹)
+}
+
+SelectedAddOn {
+    name  : String
+    price : Float
+}
+
+PolicyAddOn {
+    name  : String
+    price : Float
+}
+
+QuoteItem {
+    plan_id          : String      (ref → InsurancePlan._id, cross-backend)
+    company_name     : String
+    logo_url         : Optional[String]
+    plan_name        : String
+    coverage_amount  : Float
+    base_premium     : Float
+    duration_years   : Integer
+    benefits         : List[String]
+    selected_add_ons : List[SelectedAddOn]
+    add_on_total     : Float       (default: 0.0)
+    tax_amount       : Float       (default: 0.0)
+    total_premium    : Float
+    quote_status     : QuoteStatus (default: GENERATED)
+}
+
+
+===========================================
+MAIN BACKEND — 6 Models Planned/Built
+Database: "insureflow_main"
+File: main_backend/core/models/
+===========================================
+
+
+--- Model 1: User ---
+Collection: "users"
+File: user_model.py
+One model for both Customer (USER) and Staff (ADMIN).
+OTP state is embedded here — no separate Auth collection.
+
+User {
+    _id              : ObjectId
+    mobile_number    : String          (unique — primary identity for USER)
+    first_name       : String
+    last_name        : String
+    user_role        : UserRole        (default: USER)
+    email            : Optional[EmailStr]  (unique sparse — login identity for ADMIN)
+    password         : Optional[String]    (hashed — ADMIN only)
+    dob              : Optional[Date]
+    address          : Optional[Address]   (embedded sub-model)
+    user_metadata    : Optional[dict]
+    otp              : Optional[UserOtp]   (embedded — None when no OTP pending)
+    created_at       : DateTime
+    updated_at       : DateTime
+}
+
+
+--- Model 2: Transaction ---
+Collection: "transactions"
+File: transaction.py
+
+Transaction {
+    _id              : ObjectId
+    transaction_id   : String          (unique, e.g. "TXN-2026-0001")
+    user_id          : String          (ref → User._id)
+    current_status   : TransactionStatus (default: FORM_SUBMITTED)
+    status_history   : List[StatusHistoryEntry]
+    created_at       : DateTime
+    updated_at       : DateTime
+}
+
+
+--- Model 3: InsuranceDetail ---
+Collection: "insurance_details"
+File: insurance_detail_model.py
+Replaces the old Application model.
+Insurance-detail fields will be added after final confirmation.
+
+InsuranceDetail {
+    _id              : ObjectId
+    transaction_id   : String          (ref → Transaction.transaction_id)
+    user_id          : String          (ref → User._id)
+    insurance_details: dict            (placeholder — fields pending)
+    created_at       : DateTime
+    updated_at       : DateTime
+}
+
+
+--- Model 4: Policy ---
+Collection: "policies"
+File: pollicy.py   <- NOTE: filename has a typo, should be policy.py
+
+Policy {
+    _id              : ObjectId
+    policy_number    : String          (unique, e.g. "POL-2026-0001")
+    transaction_id   : String          (ref → Transaction.transaction_id)
+    user_id          : String          (ref → User._id)
+    company_name     : String
+    plan_name        : String
+    coverage_amount  : Float
+    base_premium     : Float
+    add_ons          : List[PolicyAddOn]   (embedded snapshot)
+    add_on_total     : Float           (default: 0.0)
+    tax_amount       : Float
+    total_premium    : Float
+    start_date       : Date
+    end_date         : Date
+    pdf_url          : Optional[String]
+    policy_status    : PolicyStatus    (default: ACTIVE)
+    created_at       : DateTime        (immutable after issuance)
+}
+
+
+--- Model 5: Ticket ---
+Collection: "tickets"
+File: ticket_model.py
+
+Ticket {
+    _id              : ObjectId
+    ticket_id        : String          (unique, e.g. "TKT-2026-0001")
+    user_id          : String          (ref → User._id)
+    transaction_id   : String          (ref → Transaction.transaction_id)
+    issue_type       : String
+    description      : String
+    ticket_status    : TicketStatus    (default: OPEN)
+    admin_id         : Optional[String]    (ref → User._id where role=ADMIN)
+    admin_response   : Optional[String]
+    resolved_at      : Optional[DateTime]
+    created_at       : DateTime
+    updated_at       : DateTime
+}
+
+
+--- Model 6: Notification ---
+Collection: "notifications"
+File: NOT YET BUILT — deferred to later phase.
+
+
+===========================================
+PROVIDER BACKEND — 4 Models Built
+Database: "insureflow_provider"
+File: provider_backend/core/models/
+===========================================
+
+
+--- Model 7: Company ---
+Collection: "companies"
+File: company.py
+Registers policy provider companies and mid-app clients such as InsureFlow.
+Used for API-key-based communication with the provider backend.
+
+Company {
+    _id              : ObjectId
+    company_name     : String          (unique, e.g. "LIC", "HDFC Life", "InsureFlow")
+    api_key_hash     : String          (hashed API key — never plain text)
+    is_active        : Boolean         (default: True)
+    created_at       : DateTime
+}
+
+
+--- Model 8: InsurancePlan ---
+Collection: "insurance_plans"
+File: insurance_plan.py
+Add-ons are embedded inside the plan — no separate AddOn collection.
+
+InsurancePlan {
+    _id                  : ObjectId
+    company_name         : String      (e.g. "LIC", "HDFC Life")
+    logo_url             : Optional[String]
+    plan_name            : String      (e.g. "LIC Jeevan Anand")
+    plan_code            : String      (unique, e.g. "LIC-JA-001")
+    insurance_type       : String      ("life" | "health" | "general")
+    coverage_amount      : Float       (₹)
+    base_premium         : Float       (yearly ₹)
+    duration_years       : Integer
+    benefits             : List[String]
+    terms                : Optional[String]
+    available_add_ons    : List[EmbeddedAddOn]  (default: [] for plans with no add-ons)
+    created_at           : DateTime
+    updated_at           : DateTime
+}
+
+
+--- Model 9: Quote ---
+Collection: "quotes"
+File: quote.py
+ONE document per transaction — contains all plan quotes as a list.
+
+Quote {
+    _id              : ObjectId
+    transaction_id   : String          (ref → Transaction.transaction_id — cross-backend)
+    items            : List[QuoteItem] (one QuoteItem per matching InsurancePlan)
+    created_at       : DateTime
+}
+
+
+--- Model 10: Payment ---
+Collection: "payments"
+File: payment.py
+NOTE: Originally specified in main_backend — moved to provider_backend.
+Additional payment-field changes pending final confirmation.
+
+Payment {
+    _id                : ObjectId
+    transaction_id     : String        (ref → Transaction.transaction_id)
+    user_id            : String        (ref → User._id)
+    amount             : Float
+    payment_method     : String        (default: "mock_gateway")
+    payment_reference  : String        (unique, e.g. "PAY-98765")
+    payment_status     : PaymentStatus (default: PENDING)
+    created_at         : DateTime
+
+    -- Pending Update --
+    additional_fields  : TBD
+}
+
+
+===========================================
+RELATIONSHIPS
+===========================================
+
+USER (role=USER)
+ |-- 1:Many --> TRANSACTION (user_id)
+ |                |-- 1:1 --> INSURANCE DETAIL (transaction_id, user_id)
+ |                |-- 1:1 --> QUOTE (transaction_id) [provider backend]
+ |                |             |-- items[]: List[QuoteItem]
+ |                |                           |-- selected_add_ons: List[SelectedAddOn]
+ |                |-- 1:1 --> PAYMENT (transaction_id, user_id) [provider backend]
+ |                |-- 1:1 --> POLICY (transaction_id, user_id)
+ |                |             |-- add_ons: List[PolicyAddOn] (embedded)
+ |                |-- 1:Many --> TICKET (transaction_id, user_id)
+
+USER (role=ADMIN)
+ |-- handles --> TICKET (admin_id)
+ |-- registers --> COMPANY (provider backend access)
+
+COMPANY
+ |-- represents --> Insurance provider company OR mid-app client (e.g. InsureFlow)
+ |-- authenticates --> provider backend APIs using API key
+
+INSURANCE PLAN (standalone)
+ |-- available_add_ons: List[EmbeddedAddOn] (embedded)
+ |-- referenced in --> QuoteItem.plan_id
+
+Cross-Backend Link:
+  Main Backend (Transaction.transaction_id) <---> Provider Backend (Quote.transaction_id)
+  Connected via transaction_id (String), not ObjectId.
+
+
+===========================================
+DATABASE SETUP
+===========================================
+
+MongoDB Atlas — single cluster, two databases:
+
+  insureflow_main (main_backend)
+   |-- users
+   |-- transactions
+   |-- insurance_details
+   |-- policies
+   |-- tickets
+   |-- notifications  <- not yet built
+   --  payment
+
+  insureflow_provider (provider_backend)
+   |-- companies
+   |-- insurance_plans
+   |-- quotes
+   |-- payments
+
+
+===========================================
+SUMMARY TABLE
+===========================================
+
+#    Model           Backend    Collection        File                  Status
+--   -----           -------    ----------        ----                  ------
+1    User            Main       users             user_model.py         Built
+2    Auth            Main       auth              —                     Replaced by embedded OTP in User
+3    Transaction     Main       transactions      transaction.py        Built
+4    InsuranceDetail Main       insurance_details insurance_detail_model.py Planned (replaces Application)
+5    Policy          Main       policies          pollicy.py            Built (filename typo)
+6    Ticket          Main       tickets           ticket_model.py       Built
+7    Company         Provider   companies         company.py            Built (API-key registration)
+8    InsurancePlan   Provider   insurance_plans   insurance_plan.py     Built
+9    AddOn           Provider   add_ons           —                     Merged into InsurancePlan
+10   Quote           Provider   quotes            quote.py              Built (redesigned)
+11   Payment         Provider   payments          payment.py            Built (moved from main, pending updates)
