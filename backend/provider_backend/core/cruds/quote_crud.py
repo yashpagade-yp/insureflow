@@ -1,0 +1,98 @@
+"""CRUD helpers for quote documents in the provider backend."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from ..database.database import get_engine
+from ..models.quote_model import QuoteItem, QuoteModel, QuoteStatus, SelectedAddOn
+
+
+class QuoteCrud:
+    """Provides database operations for provider quote documents."""
+
+    def __init__(self) -> None:
+        """Initialise the CRUD helper with the shared ODMantic engine."""
+
+        self.engine = get_engine()
+
+    async def create(self, quote: QuoteModel) -> QuoteModel:
+        """Persist a new quote document."""
+
+        await self.engine.save(quote)
+        return quote
+
+    async def get_by_transaction_id(self, transaction_id: str) -> QuoteModel | None:
+        """Return one quote document by transaction id."""
+
+        return await self.engine.find_one(
+            QuoteModel,
+            QuoteModel.transaction_id == transaction_id,
+        )
+
+    async def save(self, quote: QuoteModel) -> QuoteModel:
+        """Persist an already-mutated quote document."""
+
+        quote.updated_at = datetime.now(timezone.utc)
+        await self.engine.save(quote)
+        return quote
+
+    async def replace_items(
+        self,
+        quote: QuoteModel,
+        items: list[QuoteItem],
+    ) -> QuoteModel:
+        """Replace all generated quote items for a transaction."""
+
+        quote.items = items
+        quote.updated_at = datetime.now(timezone.utc)
+        await self.engine.save(quote)
+        return quote
+
+    async def set_selected_plan_id(self, quote: QuoteModel, selected_plan_id: str) -> QuoteModel:
+        """Save the selected provider plan id on a quote document."""
+
+        quote.selected_plan_id = selected_plan_id
+        quote.updated_at = datetime.now(timezone.utc)
+        await self.engine.save(quote)
+        return quote
+
+    async def set_selected_add_ons(
+        self,
+        quote: QuoteModel,
+        plan_id: str,
+        selected_add_ons: list[SelectedAddOn],
+        add_on_total: float,
+        tax_amount: float,
+        total_premium: float,
+    ) -> QuoteModel:
+        """Update selected add-ons and totals for one embedded quote item."""
+
+        for item in quote.items:
+            if item.plan_id == plan_id:
+                item.selected_add_ons = selected_add_ons
+                item.add_on_total = add_on_total
+                item.tax_amount = tax_amount
+                item.total_premium = total_premium
+                break
+
+        quote.updated_at = datetime.now(timezone.utc)
+        await self.engine.save(quote)
+        return quote
+
+    async def update_item_status(
+        self,
+        quote: QuoteModel,
+        plan_id: str,
+        status: QuoteStatus,
+    ) -> QuoteModel:
+        """Update the status of one embedded quote item."""
+
+        for item in quote.items:
+            if item.plan_id == plan_id:
+                item.quote_status = status
+                break
+
+        quote.updated_at = datetime.now(timezone.utc)
+        await self.engine.save(quote)
+        return quote
