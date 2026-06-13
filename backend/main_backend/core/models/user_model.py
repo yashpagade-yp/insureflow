@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from odmantic import Field, Model
 from odmantic.config import ODMConfigDict
@@ -137,7 +137,7 @@ class User(Model):
         default=None,
         description="Embedded postal address for the user",
     )
-    user_metadata: Optional[dict[str, Any]] = Field(
+    user_metadata: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Additional metadata about the user",
     )

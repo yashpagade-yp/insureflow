@@ -6,9 +6,9 @@ from datetime import datetime, timezone
 
 from odmantic import ObjectId
 
-from ...commons.logger import logger
-from ..database.database import get_engine
-from ..models.policy_model import PolicyModel
+from commons.logger import logger
+from core.database.database import get_engine
+from core.models.policy_model import PolicyModel
 
 logging = logger(__name__)
 

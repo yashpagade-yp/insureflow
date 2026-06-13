@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import List, Optional
 
 from odmantic import Field, Model
 from odmantic.config import ODMConfigDict
@@ -66,7 +67,7 @@ class InsurancePlan(Model):
     """
 
     company_name: str = Field(..., description="Name of the provider company")
-    logo_url: str | None = Field(
+    logo_url: Optional[str] = Field(
         default=None,
         description="Optional logo URL for the provider company",
     )
@@ -83,15 +84,15 @@ class InsurancePlan(Model):
     coverage_amount: float = Field(..., ge=0, description="Coverage amount for the plan")
     base_premium: float = Field(..., ge=0, description="Base yearly premium for the plan")
     duration_years: int = Field(..., ge=1, description="Plan duration in years")
-    benefits: list[str] = Field(
+    benefits: List[str] = Field(
         default_factory=list,
         description="List of benefits included in the insurance plan",
     )
-    terms: str | None = Field(
+    terms: Optional[str] = Field(
         default=None,
         description="Optional textual terms for the plan",
     )
-    available_add_ons: list[EmbeddedAddOn] = Field(
+    available_add_ons: List[EmbeddedAddOn] = Field(
         default_factory=list,
         description="Embedded list of add-ons available for this plan",
     )

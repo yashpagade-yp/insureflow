@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Optional
 
 from odmantic import Field, Model
 from odmantic.config import ODMConfigDict
@@ -96,7 +97,7 @@ class ProviderUser(Model):
         unique=True,
         description="Unique email address used for provider-side login",
     )
-    mobile_number: str | None = Field(
+    mobile_number: Optional[str] = Field(
         default=None,
         description="Optional contact mobile number for the provider admin",
     )
@@ -108,7 +109,7 @@ class ProviderUser(Model):
         default=ProviderUserRole.ADMIN,
         description="Assigned role for the provider-side user",
     )
-    otp: ProviderUserOtp | None = Field(
+    otp: Optional[ProviderUserOtp] = Field(
         default=None,
         description="Active OTP state for provider-admin authentication",
     )
@@ -116,7 +117,7 @@ class ProviderUser(Model):
         default=True,
         description="Whether the provider-side user account is active",
     )
-    last_login_at: datetime | None = Field(
+    last_login_at: Optional[datetime] = Field(
         default=None,
         description="Timestamp of the latest successful provider-side login",
     )

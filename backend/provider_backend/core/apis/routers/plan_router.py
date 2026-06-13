@@ -5,14 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
-from ....commons.auth import decodeJWT
-from ....commons.logger import logger
-from ...controllers.plan_controller import PlanController
-from ..schemas.request_schema.plan_request_schema import (
+from commons.auth import decodeJWT
+from commons.logger import logger
+from core.controllers.plan_controller import PlanController
+from core.apis.schemas.request_schema.plan_request_schema import (
     PlanCreateRequest,
     PlanUpdateRequest,
 )
-from ..schemas.response_schema.plan_response_schema import (
+from core.apis.schemas.response_schema.plan_response_schema import (
     PlanListResponse,
     PlanResponse,
 )

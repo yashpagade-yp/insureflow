@@ -7,18 +7,18 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from ...commons.logger import logger
-from ..apis.schemas.request_schema.quote_request_schema import QuoteGenerationRequest
-from ..apis.schemas.response_schema.quote_response_schema import (
+from commons.logger import logger
+from core.apis.schemas.request_schema.quote_request_schema import QuoteGenerationRequest
+from core.apis.schemas.response_schema.quote_response_schema import (
     QuoteAvailableAddOnResponse,
     QuoteItemResponse,
     QuoteResponse,
     QuoteSelectedAddOnResponse,
 )
-from ..cruds.insurance_plan_crud import InsurancePlanCrud
-from ..cruds.quote_crud import QuoteCrud
-from ..models.insurance_model import InsuranceType
-from ..models.quote_model import (
+from core.cruds.insurance_plan_crud import InsurancePlanCrud
+from core.cruds.quote_crud import QuoteCrud
+from core.models.insurance_model import InsuranceType
+from core.models.quote_model import (
     AvailableAddOn,
     QuoteItem,
     QuoteModel,

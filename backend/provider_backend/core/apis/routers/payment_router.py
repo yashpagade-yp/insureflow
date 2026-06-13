@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from typing import Annotated
 
-from ....commons.logger import logger
-from ...controllers.payment_controller import PaymentController
-from ..schemas.request_schema.payment_request_schema import (
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from commons.logger import logger
+from core.controllers.payment_controller import PaymentController
+from core.models.company_model import CompanyModel
+from core.services.broker_auth_service import validate_broker_api_key
+from core.apis.schemas.request_schema.payment_request_schema import (
     PaymentCreateRequest,
     PaymentOtpVerifyRequest,
 )
-from ..schemas.response_schema.payment_response_schema import (
+from core.apis.schemas.response_schema.payment_response_schema import (
     PaymentCreateResponse,
     PaymentOtpSendResponse,
     PaymentOtpVerifyResponse,
@@ -23,7 +27,10 @@ payment_controller = PaymentController()
 
 
 @router.post("", response_model=PaymentCreateResponse)
-async def create_payment(payload: PaymentCreateRequest) -> PaymentCreateResponse:
+async def create_payment(
+    payload: PaymentCreateRequest,
+    broker_company: Annotated[CompanyModel, Depends(validate_broker_api_key)],
+) -> PaymentCreateResponse:
     """Create a provider-side payment record for one transaction.
 
     Args:
@@ -37,7 +44,10 @@ async def create_payment(payload: PaymentCreateRequest) -> PaymentCreateResponse
     """
 
     try:
-        logging.info("Calling /v1/payments endpoint")
+        logging.info(
+            "Calling /v1/payments endpoint for broker company %s",
+            broker_company.company_name,
+        )
         response = await payment_controller.create_payment(
             transaction_id=payload.transaction_id,
             user_id=payload.user_id,
@@ -56,7 +66,10 @@ async def create_payment(payload: PaymentCreateRequest) -> PaymentCreateResponse
 
 
 @router.post("/{payment_reference}/send-otp", response_model=PaymentOtpSendResponse)
-async def send_payment_otp(payment_reference: str) -> PaymentOtpSendResponse:
+async def send_payment_otp(
+    payment_reference: str,
+    broker_company: Annotated[CompanyModel, Depends(validate_broker_api_key)],
+) -> PaymentOtpSendResponse:
     """Generate and store a payment OTP for one payment reference.
 
     Args:
@@ -70,7 +83,11 @@ async def send_payment_otp(payment_reference: str) -> PaymentOtpSendResponse:
     """
 
     try:
-        logging.info("Calling /v1/payments/%s/send-otp endpoint", payment_reference)
+        logging.info(
+            "Calling /v1/payments/%s/send-otp endpoint for broker company %s",
+            payment_reference,
+            broker_company.company_name,
+        )
         response = await payment_controller.send_payment_otp(payment_reference)
         return response
     except HTTPException as httperror:
@@ -95,6 +112,7 @@ async def send_payment_otp(payment_reference: str) -> PaymentOtpSendResponse:
 @router.post("/verify-otp", response_model=PaymentOtpVerifyResponse)
 async def verify_payment_otp(
     payload: PaymentOtpVerifyRequest,
+    broker_company: Annotated[CompanyModel, Depends(validate_broker_api_key)],
 ) -> PaymentOtpVerifyResponse:
     """Verify a payment OTP and mark the payment successful.
 
@@ -110,8 +128,9 @@ async def verify_payment_otp(
 
     try:
         logging.info(
-            "Calling /v1/payments/verify-otp endpoint for transaction %s",
+            "Calling /v1/payments/verify-otp endpoint for transaction %s and broker company %s",
             payload.transaction_id,
+            broker_company.company_name,
         )
         response = await payment_controller.verify_payment_otp(
             transaction_id=payload.transaction_id,
@@ -131,7 +150,10 @@ async def verify_payment_otp(
 
 
 @router.get("/{payment_reference}/status", response_model=PaymentStatusResponse)
-async def get_payment_status(payment_reference: str) -> PaymentStatusResponse:
+async def get_payment_status(
+    payment_reference: str,
+    broker_company: Annotated[CompanyModel, Depends(validate_broker_api_key)],
+) -> PaymentStatusResponse:
     """Return payment status details for one payment reference.
 
     Args:
@@ -145,7 +167,11 @@ async def get_payment_status(payment_reference: str) -> PaymentStatusResponse:
     """
 
     try:
-        logging.info("Calling /v1/payments/%s/status endpoint", payment_reference)
+        logging.info(
+            "Calling /v1/payments/%s/status endpoint for broker company %s",
+            payment_reference,
+            broker_company.company_name,
+        )
         response = await payment_controller.get_payment_status(payment_reference)
         return response
     except HTTPException as httperror:

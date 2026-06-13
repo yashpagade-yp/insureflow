@@ -7,24 +7,24 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
-from ....commons.auth import decodeJWT
-from ....commons.logger import logger
-from ...controllers.user_controller import UserController
-from ..schemas.request_schema.auth_request_schema import (
+from commons.auth import decodeJWT
+from commons.logger import logger
+from core.controllers.user_controller import UserController
+from core.apis.schemas.request_schema.auth_request_schema import (
     AdminLoginRequest,
     AdminLoginVerifyRequest,
 )
-from ..schemas.request_schema.user_request_schema import (
+from core.apis.schemas.request_schema.user_request_schema import (
     AdminUpdateRequest,
     UserLoginOtpRequest,
     UserLoginVerifyRequest,
     UserUpdateRequest,
 )
-from ..schemas.response_schema.auth_response_schema import (
+from core.apis.schemas.response_schema.auth_response_schema import (
     AdminLoginOtpResponse,
     AdminLoginVerifyResponse,
 )
-from ..schemas.response_schema.user_response_schema import (
+from core.apis.schemas.response_schema.user_response_schema import (
     AdminResponse,
     UserLoginOtpResponse,
     UserLoginVerifyResponse,

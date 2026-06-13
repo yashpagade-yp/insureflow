@@ -7,18 +7,18 @@ from hashlib import sha256
 
 from fastapi import HTTPException, status
 
-from ...commons.logger import logger
-from ..apis.schemas.request_schema.company_request_schema import (
+from commons.logger import logger
+from core.apis.schemas.request_schema.company_request_schema import (
     CompanyCreateRequest,
     CompanyUpdateRequest,
 )
-from ..apis.schemas.response_schema.company_response_schema import (
+from core.apis.schemas.response_schema.company_response_schema import (
     CompanyCreateResponse,
     CompanyListResponse,
     CompanyResponse,
 )
-from ..cruds.company_crud import CompanyCrud
-from ..models.company_model import CompanyModel, CompanyType
+from core.cruds.company_crud import CompanyCrud
+from core.models.company_model import CompanyModel, CompanyType
 
 logging = logger(__name__)
 

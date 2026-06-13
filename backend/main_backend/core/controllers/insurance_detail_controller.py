@@ -6,22 +6,23 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 
-from ...commons.logger import logger
-from ..apis.schemas.request_schema.insurance_detail_request_schema import (
+from commons.logger import logger
+from core.apis.schemas.request_schema.insurance_detail_request_schema import (
     InsuranceDetailCreateRequest,
     InsuranceDetailUpdateRequest,
 )
-from ..apis.schemas.response_schema.insurance_detail_response_schema import (
+from core.apis.schemas.response_schema.insurance_detail_response_schema import (
     InsuranceDetailCreateResponse,
     InsuranceDetailUpdateResponse,
     LatestIncompleteInsuranceDetailResponse,
 )
-from ..cruds.insurance_detail_crud import InsuranceDetailCrud
-from ..cruds.transaction_crud import TransactionCrud
-from ..cruds.user_crud import UserCrud
-from ..models.insurance_detail_model import InsuranceDetailModel
-from ..models.transaction_model import TransactionModel
-from ..models.user_model import UserModel
+from core.cruds.insurance_detail_crud import InsuranceDetailCrud
+from core.cruds.transaction_crud import TransactionCrud
+from core.cruds.user_crud import UserCrud
+from core.models.insurance_detail_model import InsuranceDetailModel
+from core.models.transaction_model import TransactionModel, TransactionStatus
+from core.models.user_model import UserModel
+from core.services.provider_service import ProviderService
 
 logging = logger(__name__)
 
@@ -35,6 +36,7 @@ class InsuranceDetailController:
         self.user_crud = UserCrud()
         self.transaction_crud = TransactionCrud()
         self.insurance_detail_crud = InsuranceDetailCrud()
+        self.provider_service = ProviderService()
 
     async def create_insurance_detail_journey(
         self,
@@ -90,6 +92,8 @@ class InsuranceDetailController:
                     }
                 )
             )
+            if insurance_detail.is_form_completed:
+                await self._generate_quotes_for_transaction(transaction, insurance_detail)
 
             logging.info(
                 "Insurance-detail journey created successfully for transaction %s",
@@ -158,6 +162,8 @@ class InsuranceDetailController:
             transaction.last_active_at = now
             transaction.updated_at = now
             transaction = await self.transaction_crud.save(transaction)
+            if insurance_detail.is_form_completed:
+                await self._generate_quotes_for_transaction(transaction, insurance_detail)
             logging.info(
                 "Insurance detail updated successfully for transaction %s",
                 transaction_id,
@@ -254,3 +260,39 @@ class InsuranceDetailController:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to fetch latest incomplete journey.",
             )
+
+    async def _generate_quotes_for_transaction(
+        self,
+        transaction: TransactionModel,
+        insurance_detail: InsuranceDetailModel,
+    ) -> None:
+        """Trigger provider quote generation and update transaction status."""
+
+        if transaction.current_status != TransactionStatus.FORM_SUBMITTED:
+            return
+
+        await self.provider_service.generate_quotes(
+            {
+                "transaction_id": transaction.transaction_id,
+                "user_id": insurance_detail.user_id,
+                "insurance_type": insurance_detail.insurance_type.value,
+                "proposer_dob": (
+                    insurance_detail.proposer_dob.isoformat()
+                    if insurance_detail.proposer_dob is not None
+                    else None
+                ),
+                "proposer_gender": insurance_detail.proposer_gender,
+                "city": insurance_detail.city,
+                "state": insurance_detail.state,
+                "sum_insured_requested": insurance_detail.sum_insured_requested,
+                "policy_term_years": insurance_detail.policy_term_years,
+                "occupation": insurance_detail.occupation,
+                "annual_income": insurance_detail.annual_income,
+                "medical_history": insurance_detail.medical_history,
+                "additional_answers": insurance_detail.additional_answers,
+            }
+        )
+        await self.transaction_crud.update_status(
+            transaction,
+            TransactionStatus.OFFERS_RECEIVED,
+        )

@@ -4,19 +4,19 @@ from __future__ import annotations
 
 from fastapi import HTTPException, status
 
-from ...commons.logger import logger
-from ..apis.schemas.request_schema.plan_request_schema import (
+from commons.logger import logger
+from core.apis.schemas.request_schema.plan_request_schema import (
     PlanAddOnRequest,
     PlanCreateRequest,
     PlanUpdateRequest,
 )
-from ..apis.schemas.response_schema.plan_response_schema import (
+from core.apis.schemas.response_schema.plan_response_schema import (
     PlanAddOnResponse,
     PlanListResponse,
     PlanResponse,
 )
-from ..cruds.insurance_plan_crud import InsurancePlanCrud
-from ..models.insurance_model import EmbeddedAddOn, InsuranceModel, InsuranceType
+from core.cruds.insurance_plan_crud import InsurancePlanCrud
+from core.models.insurance_model import EmbeddedAddOn, InsuranceModel, InsuranceType
 
 logging = logger(__name__)
 

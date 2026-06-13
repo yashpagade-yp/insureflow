@@ -7,14 +7,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
-from ....commons.auth import decodeJWT
-from ....commons.logger import logger
-from ...controllers.company_controller import CompanyController
-from ..schemas.request_schema.company_request_schema import (
+from commons.auth import decodeJWT
+from commons.logger import logger
+from core.controllers.company_controller import CompanyController
+from core.apis.schemas.request_schema.company_request_schema import (
     CompanyCreateRequest,
     CompanyUpdateRequest,
 )
-from ..schemas.response_schema.company_response_schema import (
+from core.apis.schemas.response_schema.company_response_schema import (
     CompanyCreateResponse,
     CompanyListResponse,
     CompanyResponse,

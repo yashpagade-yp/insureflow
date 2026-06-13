@@ -7,9 +7,9 @@ from typing import Any
 
 from odmantic import ObjectId
 
-from ...commons.logger import logger
-from ..database.database import get_engine
-from ..models.insurance_model import InsuranceModel, InsuranceType
+from commons.logger import logger
+from core.database.database import get_engine
+from core.models.insurance_model import InsuranceModel, InsuranceType
 
 logging = logger(__name__)
 

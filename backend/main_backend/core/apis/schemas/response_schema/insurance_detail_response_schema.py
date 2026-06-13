@@ -6,8 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ....models.insurance_detail_model import InsuranceType
-from ....models.transaction_model import TransactionStatus
+from core.models.insurance_detail_model import InsuranceType
+from core.models.transaction_model import TransactionStatus
 
 
 class InsuranceDetailCreateResponse(BaseModel):

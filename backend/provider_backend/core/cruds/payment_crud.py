@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from ...commons.logger import logger
-from ..database.database import get_engine
-from ..models.payment_model import PaymentModel, PaymentOtp, PaymentStatus
+from commons.logger import logger
+from core.database.database import get_engine
+from core.models.payment_model import PaymentModel, PaymentOtp, PaymentStatus
 
 logging = logger(__name__)
 

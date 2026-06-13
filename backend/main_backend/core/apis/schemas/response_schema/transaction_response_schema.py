@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ....models.transaction_model import TransactionStatus
+from core.models.transaction_model import TransactionStatus
 
 
 class TransactionResponse(BaseModel):

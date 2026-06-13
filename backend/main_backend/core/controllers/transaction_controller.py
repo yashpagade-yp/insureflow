@@ -4,17 +4,18 @@ from __future__ import annotations
 
 from fastapi import HTTPException, status
 
-from ...commons.logger import logger
-from ..apis.schemas.request_schema.quote_request_schema import (
+from commons.logger import logger
+from core.apis.schemas.request_schema.quote_request_schema import (
     QuoteSelectAddOnsRequest,
     QuoteSelectPlanRequest,
 )
-from ..apis.schemas.response_schema.transaction_response_schema import (
+from core.apis.schemas.response_schema.transaction_response_schema import (
     TransactionListResponse,
     TransactionResponse,
 )
-from ..cruds.transaction_crud import TransactionCrud
-from ..models.transaction_model import TransactionModel, TransactionStatus
+from core.cruds.transaction_crud import TransactionCrud
+from core.models.transaction_model import TransactionModel, TransactionStatus
+from core.services.provider_service import ProviderService
 
 logging = logger(__name__)
 
@@ -26,6 +27,7 @@ class TransactionController:
         """Initialise the controller with its CRUD dependency."""
 
         self.transaction_crud = TransactionCrud()
+        self.provider_service = ProviderService()
 
     async def get_transaction(self, transaction_id: str) -> TransactionResponse:
         """Return one transaction by business transaction id."""
@@ -98,6 +100,10 @@ class TransactionController:
                     detail="Transaction not found.",
                 )
 
+            await self.provider_service.select_plan(
+                payload.transaction_id,
+                payload.selected_plan_id,
+            )
             transaction = await self.transaction_crud.set_selected_plan_id(
                 transaction,
                 payload.selected_plan_id,
@@ -141,6 +147,11 @@ class TransactionController:
                     detail="Transaction not found.",
                 )
 
+            await self.provider_service.update_add_ons(
+                payload.transaction_id,
+                payload.selected_plan_id,
+                [item.model_dump() for item in payload.selected_add_ons],
+            )
             if transaction.selected_plan_id != payload.selected_plan_id:
                 transaction = await self.transaction_crud.set_selected_plan_id(
                     transaction,

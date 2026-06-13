@@ -6,24 +6,24 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 
-from ...commons.auth import (
+from commons.auth import (
     generate_otp,
     hash_otp,
     sign_jwt,
     verify_hashed_otp,
     verify_password,
 )
-from ...commons.logger import logger
-from ..apis.schemas.request_schema.auth_request_schema import (
+from commons.logger import logger
+from core.apis.schemas.request_schema.auth_request_schema import (
     ProviderAdminLoginRequest,
     ProviderAdminLoginVerifyRequest,
 )
-from ..apis.schemas.response_schema.auth_response_schema import (
+from core.apis.schemas.response_schema.auth_response_schema import (
     ProviderAdminLoginOtpResponse,
     ProviderAdminLoginVerifyResponse,
 )
-from ..cruds.provider_user_crud import ProviderUserCrud
-from ..models.provider_user_model import (
+from core.cruds.provider_user_crud import ProviderUserCrud
+from core.models.provider_user_model import (
     ProviderOtpPurpose,
     ProviderUserOtp,
 )
