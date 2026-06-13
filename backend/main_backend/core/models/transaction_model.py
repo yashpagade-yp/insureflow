@@ -74,6 +74,12 @@ class TransactionV1(Model):
         user_id: Identifier of the user who owns the transaction.
         current_status: Current lifecycle status of the transaction.
         status_history: Ordered history of status transition events.
+        last_active_at: UTC timestamp of the latest user or system activity on
+            the transaction.
+        selected_plan_id: Optional selected provider plan identifier for the
+            journey.
+        completed_at: UTC timestamp when the transaction finished
+            successfully.
         created_at: UTC timestamp when the transaction was created.
         updated_at: UTC timestamp for the latest transaction update.
     """
@@ -93,6 +99,18 @@ class TransactionV1(Model):
             StatusHistoryEntry(status=TransactionStatus.FORM_SUBMITTED)
         ],
         description="Chronological history of transaction status transitions",
+    )
+    last_active_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Timestamp of the latest activity on the transaction",
+    )
+    selected_plan_id: str | None = Field(
+        default=None,
+        description="Optional selected provider plan identifier",
+    )
+    completed_at: datetime | None = Field(
+        default=None,
+        description="Timestamp when the transaction completed successfully",
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

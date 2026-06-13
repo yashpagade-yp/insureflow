@@ -103,13 +103,20 @@ class Quote(Model):
 
     Attributes:
         transaction_id: Identifier of the related transaction from main backend.
+        selected_plan_id: Optional selected provider plan identifier for the
+            transaction.
         items: Embedded list of generated quote items for the transaction.
         created_at: UTC timestamp when the quote document was created.
+        updated_at: UTC timestamp when the quote document was last updated.
     """
 
     transaction_id: str = Field(
         ...,
         description="Identifier of the related main-backend transaction",
+    )
+    selected_plan_id: str | None = Field(
+        default=None,
+        description="Optional selected provider plan identifier for the transaction",
     )
     items: list[QuoteItem] = Field(
         default_factory=list,
@@ -118,6 +125,10 @@ class Quote(Model):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         description="Timestamp when the quote document was created",
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Timestamp when the quote document was last updated",
     )
 
     model_config = ODMConfigDict(

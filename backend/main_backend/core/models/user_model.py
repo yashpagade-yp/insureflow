@@ -110,6 +110,8 @@ class User(Model):
         address: Optional embedded postal address.
         user_metadata: Optional dictionary for extensible user-related data.
         otp: Optional embedded OTP state for authentication flows.
+        is_active: Whether the user account is currently active.
+        last_login_at: Optional UTC timestamp for the user's latest login.
         created_at: UTC timestamp for when the user record was created.
         updated_at: UTC timestamp for the last user record update.
     """
@@ -142,6 +144,14 @@ class User(Model):
     otp: Optional[UserOtp] = Field(
         default=None,
         description="Active OTP state for authentication flows",
+    )
+    is_active: bool = Field(
+        default=True,
+        description="Whether the user account is currently active",
+    )
+    last_login_at: Optional[datetime] = Field(
+        default=None,
+        description="Timestamp of the user's latest successful login",
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

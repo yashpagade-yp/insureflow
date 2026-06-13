@@ -68,8 +68,11 @@ class Policy(Model):
         total_premium: Final premium paid for the policy.
         start_date: Policy start date.
         end_date: Policy expiry date.
+        payment_reference: Optional payment reference linked to the issued
+            policy.
         pdf_url: Optional URL for the generated policy PDF.
         policy_status: Current policy status.
+        issued_at: UTC timestamp when the policy was issued.
         created_at: UTC timestamp when the policy was created.
     """
 
@@ -100,6 +103,10 @@ class Policy(Model):
     total_premium: float = Field(..., ge=0, description="Final total premium for the policy")
     start_date: date = Field(..., description="Policy start date")
     end_date: date = Field(..., description="Policy end date")
+    payment_reference: str | None = Field(
+        default=None,
+        description="Optional payment reference linked to the issued policy",
+    )
     pdf_url: str | None = Field(
         default=None,
         description="Optional generated PDF URL for the issued policy",
@@ -107,6 +114,10 @@ class Policy(Model):
     policy_status: PolicyStatus = Field(
         default=PolicyStatus.ACTIVE,
         description="Current status of the issued policy",
+    )
+    issued_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Timestamp when the policy was issued",
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
