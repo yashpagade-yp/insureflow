@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class QuoteSelectPlanRequest(BaseModel):
@@ -19,6 +19,8 @@ class QuoteSelectPlanRequest(BaseModel):
         description="Provider plan identifier chosen by the customer",
     )
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class QuoteSelectedAddOnRequest(BaseModel):
     """Represents one selected add-on in a quote-selection request.
@@ -30,6 +32,8 @@ class QuoteSelectedAddOnRequest(BaseModel):
 
     name: str = Field(..., description="Selected add-on name")
     price: float = Field(..., ge=0, description="Selected add-on price")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class QuoteSelectAddOnsRequest(BaseModel):
@@ -50,3 +54,5 @@ class QuoteSelectAddOnsRequest(BaseModel):
         default_factory=list,
         description="Selected add-ons for the chosen plan",
     )
+
+    model_config = ConfigDict(extra="forbid")

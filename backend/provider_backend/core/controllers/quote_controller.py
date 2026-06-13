@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import HTTPException, status
 
 from ...commons.logger import logger
 from ..apis.schemas.request_schema.quote_request_schema import QuoteGenerationRequest
 from ..apis.schemas.response_schema.quote_response_schema import (
+    QuoteAvailableAddOnResponse,
     QuoteItemResponse,
     QuoteResponse,
     QuoteSelectedAddOnResponse,
@@ -16,7 +18,13 @@ from ..apis.schemas.response_schema.quote_response_schema import (
 from ..cruds.insurance_plan_crud import InsurancePlanCrud
 from ..cruds.quote_crud import QuoteCrud
 from ..models.insurance_model import InsuranceType
-from ..models.quote_model import QuoteItem, QuoteModel, QuoteStatus, SelectedAddOn
+from ..models.quote_model import (
+    AvailableAddOn,
+    QuoteItem,
+    QuoteModel,
+    QuoteStatus,
+    SelectedAddOn,
+)
 
 logging = logger(__name__)
 
@@ -35,7 +43,7 @@ class QuoteController:
     async def generate_quotes(self, payload: QuoteGenerationRequest) -> QuoteResponse:
         """Generate or replace the provider quote document for one transaction."""
         try:
-            logging.info("Executing QuoteController.generate_quotes")
+            logging.info("Executing QuoteController.generate_quotes function")
             insurance_type = InsuranceType(payload.insurance_type)
             plans = await self.plan_crud.list_by_insurance_type(insurance_type)
             if not plans:
@@ -61,6 +69,14 @@ class QuoteController:
                         base_premium=plan.base_premium,
                         duration_years=plan.duration_years,
                         benefits=plan.benefits,
+                        available_add_ons=[
+                            AvailableAddOn(
+                                name=add_on.name,
+                                description=add_on.description,
+                                price=add_on.price,
+                            )
+                            for add_on in plan.available_add_ons
+                        ],
                         selected_add_ons=[],
                         add_on_total=0.0,
                         tax_amount=tax_amount,
@@ -72,7 +88,12 @@ class QuoteController:
             quote = await self.quote_crud.get_by_transaction_id(payload.transaction_id)
             if quote is None:
                 quote = await self.quote_crud.create(
-                    QuoteModel(transaction_id=payload.transaction_id, items=items)
+                    QuoteModel.model_validate(
+                        {
+                            "transaction_id": payload.transaction_id,
+                            "items": items,
+                        }
+                    )
                 )
             else:
                 quote = await self.quote_crud.replace_items(quote, items)
@@ -82,10 +103,13 @@ class QuoteController:
                 payload.transaction_id,
             )
             return self._build_quote_response(quote)
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in QuoteController.generate_quotes function: %s", httperror
+            )
+            raise httperror
         except Exception as error:
-            logging.error("Error in QuoteController.generate_quotes: %s", error)
+            logging.error("Error in QuoteController.generate_quotes function: %s", error)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to generate quotes.",
@@ -94,7 +118,7 @@ class QuoteController:
     async def select_plan(self, transaction_id: str, selected_plan_id: str) -> QuoteResponse:
         """Mark one plan as selected inside the provider quote document."""
         try:
-            logging.info("Executing QuoteController.select_plan")
+            logging.info("Executing QuoteController.select_plan function")
             quote = await self.quote_crud.get_by_transaction_id(transaction_id)
             if quote is None:
                 logging.warning(
@@ -122,10 +146,13 @@ class QuoteController:
                 transaction_id,
             )
             return self._build_quote_response(quote)
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in QuoteController.select_plan function: %s", httperror
+            )
+            raise httperror
         except Exception as error:
-            logging.error("Error in QuoteController.select_plan: %s", error)
+            logging.error("Error in QuoteController.select_plan function: %s", error)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to select quote plan.",
@@ -135,11 +162,11 @@ class QuoteController:
         self,
         transaction_id: str,
         selected_plan_id: str,
-        selected_add_ons: list[dict[str, float]],
+        selected_add_ons: list[dict[str, Any]],
     ) -> QuoteResponse:
         """Save selected add-ons and recompute totals for the chosen quote item."""
         try:
-            logging.info("Executing QuoteController.save_selected_add_ons")
+            logging.info("Executing QuoteController.save_selected_add_ons function")
             quote = await self.quote_crud.get_by_transaction_id(transaction_id)
             if quote is None:
                 logging.warning(
@@ -166,9 +193,10 @@ class QuoteController:
                     detail="Selected plan not found in quote items.",
                 )
 
-            selected_add_on_models = [
-                SelectedAddOn(**item) for item in selected_add_ons
-            ]
+            selected_add_on_models = self._build_selected_add_on_models(
+                selected_add_ons=selected_add_ons,
+                available_add_ons=target_item.available_add_ons,
+            )
             add_on_total = round(sum(item.price for item in selected_add_on_models), 2)
             subtotal = target_item.base_premium + add_on_total
             tax_amount = round(subtotal * self.TAX_RATE, 2)
@@ -193,10 +221,16 @@ class QuoteController:
                 transaction_id,
             )
             return self._build_quote_response(quote)
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in QuoteController.save_selected_add_ons function: %s",
+                httperror,
+            )
+            raise httperror
         except Exception as error:
-            logging.error("Error in QuoteController.save_selected_add_ons: %s", error)
+            logging.error(
+                "Error in QuoteController.save_selected_add_ons function: %s", error
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to save selected add-ons.",
@@ -205,7 +239,7 @@ class QuoteController:
     async def get_quote(self, transaction_id: str) -> QuoteResponse:
         """Return one provider quote document by transaction id."""
         try:
-            logging.info("Executing QuoteController.get_quote")
+            logging.info("Executing QuoteController.get_quote function")
             quote = await self.quote_crud.get_by_transaction_id(transaction_id)
             if quote is None:
                 logging.warning(
@@ -216,10 +250,13 @@ class QuoteController:
                     detail="Quote not found for this transaction.",
                 )
             return self._build_quote_response(quote)
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in QuoteController.get_quote function: %s", httperror
+            )
+            raise httperror
         except Exception as error:
-            logging.error("Error in QuoteController.get_quote: %s", error)
+            logging.error("Error in QuoteController.get_quote function: %s", error)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to fetch quote.",
@@ -241,6 +278,14 @@ class QuoteController:
                     base_premium=item.base_premium,
                     duration_years=item.duration_years,
                     benefits=item.benefits,
+                    available_add_ons=[
+                        QuoteAvailableAddOnResponse(
+                            name=add_on.name,
+                            description=add_on.description,
+                            price=add_on.price,
+                        )
+                        for add_on in item.available_add_ons
+                    ],
                     selected_add_ons=[
                         QuoteSelectedAddOnResponse(name=add_on.name, price=add_on.price)
                         for add_on in item.selected_add_ons
@@ -255,3 +300,52 @@ class QuoteController:
             created_at=quote.created_at,
             updated_at=quote.updated_at,
         )
+
+    def _build_selected_add_on_models(
+        self,
+        selected_add_ons: list[dict[str, Any]],
+        available_add_ons: list[AvailableAddOn],
+    ) -> list[SelectedAddOn]:
+        """Validate and normalize selected add-ons against the quoted plan.
+
+        Args:
+            selected_add_ons: Raw selected add-ons received from the caller.
+            available_add_ons: Add-ons available for the selected quote item.
+
+        Returns:
+            Normalized selected add-on models that can be stored in the quote.
+
+        Raises:
+            HTTPException: If any selected add-on does not belong to the quoted
+                plan or does not match the provider-side configured price.
+        """
+
+        available_by_name = {add_on.name: add_on for add_on in available_add_ons}
+        normalized_selected_add_ons: list[SelectedAddOn] = []
+
+        for raw_add_on in selected_add_ons:
+            selected_add_on = SelectedAddOn.model_validate(raw_add_on)
+            matching_add_on = available_by_name.get(selected_add_on.name)
+            if matching_add_on is None:
+                logging.warning(
+                    "Selected add-on %s is not available for the chosen plan",
+                    selected_add_on.name,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Selected add-on '{selected_add_on.name}' is not available for this plan.",
+                )
+            if selected_add_on.price != matching_add_on.price:
+                logging.warning(
+                    "Selected add-on %s price mismatch. Expected %s, got %s",
+                    selected_add_on.name,
+                    matching_add_on.price,
+                    selected_add_on.price,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Selected add-on '{selected_add_on.name}' has an invalid price.",
+                )
+            normalized_selected_add_ons.append(selected_add_on)
+
+        return normalized_selected_add_ons

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PlanAddOnResponse(BaseModel):
@@ -19,6 +19,8 @@ class PlanAddOnResponse(BaseModel):
     name: str = Field(..., description="Add-on name")
     description: str = Field(..., description="Add-on description")
     price: float = Field(..., ge=0, description="Add-on price")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class PlanResponse(BaseModel):
@@ -57,6 +59,8 @@ class PlanResponse(BaseModel):
     created_at: datetime = Field(..., description="Plan creation timestamp")
     updated_at: datetime = Field(..., description="Plan last-update timestamp")
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class PlanListResponse(BaseModel):
     """Represents a list of provider insurance plans.
@@ -68,3 +72,5 @@ class PlanListResponse(BaseModel):
 
     items: list[PlanResponse] = Field(default_factory=list, description="List of plans")
     total_count: int = Field(..., ge=0, description="Total number of returned plans")
+
+    model_config = ConfigDict(extra="forbid")

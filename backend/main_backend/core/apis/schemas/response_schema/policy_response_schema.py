@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PolicyAddOnResponse(BaseModel):
@@ -17,6 +17,8 @@ class PolicyAddOnResponse(BaseModel):
 
     name: str = Field(..., description="Policy add-on name")
     price: float = Field(..., ge=0, description="Policy add-on price")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class PolicyResponse(BaseModel):
@@ -68,6 +70,8 @@ class PolicyResponse(BaseModel):
     issued_at: datetime = Field(..., description="Policy issuance timestamp")
     created_at: datetime = Field(..., description="Policy creation timestamp")
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class PolicyPdfResponse(BaseModel):
     """Represents policy PDF access details returned to the client.
@@ -82,6 +86,8 @@ class PolicyPdfResponse(BaseModel):
     pdf_url: str = Field(..., description="Generated policy PDF URL")
     policy_status: str = Field(..., description="Current policy status")
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class PolicyListResponse(BaseModel):
     """Represents a list of issued policies for a user.
@@ -93,3 +99,5 @@ class PolicyListResponse(BaseModel):
 
     items: list[PolicyResponse] = Field(default_factory=list, description="List of policies")
     total_count: int = Field(..., ge=0, description="Total number of returned policies")
+
+    model_config = ConfigDict(extra="forbid")

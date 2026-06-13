@@ -41,6 +41,20 @@ class SelectedAddOn(BaseModel):
     price: float = Field(..., ge=0, description="Price of the selected add-on")
 
 
+class AvailableAddOn(BaseModel):
+    """Represents an add-on available for selection within a quote item.
+
+    Attributes:
+        name: Name of the available add-on.
+        description: Short explanation of the available add-on.
+        price: Price of the available add-on.
+    """
+
+    name: str = Field(..., description="Name of the available add-on")
+    description: str = Field(..., description="Description of the available add-on")
+    price: float = Field(..., ge=0, description="Price of the available add-on")
+
+
 class QuoteItem(BaseModel):
     """Represents one plan quote embedded inside the transaction quote document.
 
@@ -53,6 +67,7 @@ class QuoteItem(BaseModel):
         base_premium: Base premium before add-ons and tax.
         duration_years: Duration of the quoted plan in years.
         benefits: List of benefits included in the quoted plan.
+        available_add_ons: Embedded list of add-ons available for selection.
         selected_add_ons: Embedded list of selected add-ons.
         add_on_total: Total premium amount added by add-ons.
         tax_amount: Tax amount applied to the quote.
@@ -73,6 +88,10 @@ class QuoteItem(BaseModel):
     benefits: list[str] = Field(
         default_factory=list,
         description="List of benefits included in the quoted plan",
+    )
+    available_add_ons: list[AvailableAddOn] = Field(
+        default_factory=list,
+        description="Embedded list of add-ons available for this quote item",
     )
     selected_add_ons: list[SelectedAddOn] = Field(
         default_factory=list,

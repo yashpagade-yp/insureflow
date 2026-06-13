@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserAddressResponse(BaseModel):
@@ -28,11 +28,13 @@ class UserAddressResponse(BaseModel):
         country: Country name.
     """
 
-    street: str
-    city: str
-    state: str
-    postal_code: str
-    country: str
+    street: str = Field(..., description="Street address line")
+    city: str = Field(..., description="City name")
+    state: str = Field(..., description="State or province name")
+    postal_code: str = Field(..., description="Postal or PIN code")
+    country: str = Field(..., description="Country name")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class UserLoginOtpResponse(BaseModel):
@@ -47,6 +49,8 @@ class UserLoginOtpResponse(BaseModel):
     message: str = Field(..., description="Human-readable response message")
     mobile_number: str = Field(..., description="Customer mobile number that received the OTP")
     otp_expires_at: datetime = Field(..., description="Timestamp when the login OTP expires")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class UserLoginVerifyResponse(BaseModel):
@@ -65,6 +69,8 @@ class UserLoginVerifyResponse(BaseModel):
     token_type: str = Field(default="bearer", description="Token type returned to the client")
     user_id: str = Field(..., description="Authenticated user's identifier")
     mobile_number: str = Field(..., description="Authenticated user's mobile number")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class UserResponse(BaseModel):
@@ -109,6 +115,8 @@ class UserResponse(BaseModel):
     created_at: datetime = Field(..., description="Timestamp when the user was created")
     updated_at: datetime = Field(..., description="Timestamp when the user was last updated")
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class AdminResponse(BaseModel):
     """Represents admin details returned by the main backend.
@@ -139,3 +147,5 @@ class AdminResponse(BaseModel):
     )
     created_at: datetime = Field(..., description="Timestamp when the admin was created")
     updated_at: datetime = Field(..., description="Timestamp when the admin was last updated")
+
+    model_config = ConfigDict(extra="forbid")

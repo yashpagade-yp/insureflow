@@ -6,7 +6,7 @@ login requests are already covered in ``user_request_schema.py``.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class AdminLoginRequest(BaseModel):
@@ -19,6 +19,8 @@ class AdminLoginRequest(BaseModel):
 
     email: EmailStr = Field(..., description="Admin email used for login")
     password: str = Field(..., min_length=8, description="Plain-text admin password")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class AdminLoginVerifyRequest(BaseModel):
@@ -36,3 +38,5 @@ class AdminLoginVerifyRequest(BaseModel):
         max_length=8,
         description="Plain OTP value entered by the admin",
     )
+
+    model_config = ConfigDict(extra="forbid")

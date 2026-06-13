@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ....models.insurance_detail_model import InsuranceType
 from ....models.transaction_model import TransactionStatus
@@ -30,6 +30,8 @@ class InsuranceDetailCreateResponse(BaseModel):
     current_status: TransactionStatus = Field(..., description="Current transaction status")
     form_step: str | None = Field(default=None, description="Latest saved form step")
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class InsuranceDetailUpdateResponse(BaseModel):
     """Response payload returned after updating an insurance detail.
@@ -47,6 +49,8 @@ class InsuranceDetailUpdateResponse(BaseModel):
     insurance_detail_id: str = Field(..., description="Insurance-detail identifier")
     current_status: TransactionStatus = Field(..., description="Current transaction status")
     form_step: str | None = Field(default=None, description="Latest saved form step")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class LatestIncompleteInsuranceDetailResponse(BaseModel):
@@ -69,3 +73,5 @@ class LatestIncompleteInsuranceDetailResponse(BaseModel):
     insurance_type: InsuranceType = Field(..., description="Insurance category of the journey")
     last_active_at: datetime = Field(..., description="Latest activity timestamp")
     insurance_detail_id: str = Field(..., description="Insurance-detail identifier")
+
+    model_config = ConfigDict(extra="forbid")

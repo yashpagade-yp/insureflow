@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PaymentCreateResponse(BaseModel):
@@ -28,6 +28,8 @@ class PaymentCreateResponse(BaseModel):
     gateway_url: str | None = Field(default=None, description="Mock payment gateway URL")
     created_at: datetime = Field(..., description="Payment record creation timestamp")
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class PaymentOtpSendResponse(BaseModel):
     """Response payload returned after sending a payment OTP.
@@ -41,6 +43,8 @@ class PaymentOtpSendResponse(BaseModel):
     message: str = Field(..., description="Human-readable response message")
     payment_reference: str = Field(..., description="Payment reference for the current payment")
     otp_expires_at: datetime = Field(..., description="Timestamp when the payment OTP expires")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class PaymentOtpVerifyResponse(BaseModel):
@@ -60,9 +64,20 @@ class PaymentOtpVerifyResponse(BaseModel):
     payment_status: str = Field(..., description="Updated payment status")
     verified_at: datetime = Field(..., description="Timestamp when the OTP was verified")
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class PaymentStatusResponse(BaseModel):
-    """Represents payment status details returned to the client."""
+    """Represents payment status details returned to the client.
+
+    Attributes:
+        transaction_id: Transaction identifier for the payment journey.
+        payment_reference: Payment reference for the current payment.
+        payment_status: Current payment status.
+        amount: Recorded payment amount.
+        gateway_url: Mock payment gateway URL.
+        updated_at: Payment last-update timestamp.
+    """
 
     transaction_id: str = Field(..., description="Transaction identifier for the journey")
     payment_reference: str = Field(..., description="Payment reference for the current payment")
@@ -70,3 +85,5 @@ class PaymentStatusResponse(BaseModel):
     amount: float = Field(..., ge=0, description="Recorded payment amount")
     gateway_url: str | None = Field(default=None, description="Mock payment gateway URL")
     updated_at: datetime = Field(..., description="Payment last-update timestamp")
+
+    model_config = ConfigDict(extra="forbid")

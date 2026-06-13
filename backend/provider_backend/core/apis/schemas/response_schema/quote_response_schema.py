@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class QuoteSelectedAddOnResponse(BaseModel):
@@ -17,6 +17,24 @@ class QuoteSelectedAddOnResponse(BaseModel):
 
     name: str = Field(..., description="Selected add-on name")
     price: float = Field(..., ge=0, description="Selected add-on price")
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class QuoteAvailableAddOnResponse(BaseModel):
+    """Represents one available add-on returned in a provider quote response.
+
+    Attributes:
+        name: Available add-on name.
+        description: Available add-on description.
+        price: Available add-on price.
+    """
+
+    name: str = Field(..., description="Available add-on name")
+    description: str = Field(..., description="Available add-on description")
+    price: float = Field(..., ge=0, description="Available add-on price")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class QuoteItemResponse(BaseModel):
@@ -31,6 +49,7 @@ class QuoteItemResponse(BaseModel):
         base_premium: Quoted base premium.
         duration_years: Quoted duration in years.
         benefits: Quoted benefits.
+        available_add_ons: Add-ons available for the quoted plan.
         selected_add_ons: Selected add-ons for the quote item.
         add_on_total: Total add-on amount.
         tax_amount: Tax amount for the quote item.
@@ -46,6 +65,10 @@ class QuoteItemResponse(BaseModel):
     base_premium: float = Field(..., ge=0, description="Quoted base premium")
     duration_years: int = Field(..., ge=1, description="Quoted duration in years")
     benefits: list[str] = Field(default_factory=list, description="Quoted benefits")
+    available_add_ons: list[QuoteAvailableAddOnResponse] = Field(
+        default_factory=list,
+        description="Add-ons available for the quoted plan",
+    )
     selected_add_ons: list[QuoteSelectedAddOnResponse] = Field(
         default_factory=list,
         description="Selected add-ons for the quote item",
@@ -54,6 +77,8 @@ class QuoteItemResponse(BaseModel):
     tax_amount: float = Field(..., ge=0, description="Tax amount for the quote item")
     total_premium: float = Field(..., ge=0, description="Final total premium")
     quote_status: str = Field(..., description="Current quote item status")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class QuoteResponse(BaseModel):
@@ -75,3 +100,5 @@ class QuoteResponse(BaseModel):
     items: list[QuoteItemResponse] = Field(default_factory=list, description="Generated quote items")
     created_at: datetime = Field(..., description="Quote creation timestamp")
     updated_at: datetime = Field(..., description="Quote last-update timestamp")
+
+    model_config = ConfigDict(extra="forbid")

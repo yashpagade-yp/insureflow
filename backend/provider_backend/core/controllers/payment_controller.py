@@ -19,6 +19,11 @@ from ..models.payment_model import PaymentModel, PaymentOtp
 
 logging = logger(__name__)
 
+OTP_EXPIRY_MINUTES = 10
+OTP_REQUEST_INTERVAL_SECONDS = 30
+MAX_OTP_ATTEMPTS = 5
+OTP_ATTEMPT_WINDOW_SECONDS = 3600
+
 
 class PaymentController:
     """Handles mock payment creation and payment OTP verification."""
@@ -36,7 +41,7 @@ class PaymentController:
     ) -> PaymentCreateResponse:
         """Create a provider payment record for one transaction."""
         try:
-            logging.info("Executing PaymentController.create_payment")
+            logging.info("Executing PaymentController.create_payment function")
             existing_payment = await self.payment_crud.get_by_transaction_id(
                 transaction_id
             )
@@ -49,10 +54,12 @@ class PaymentController:
                     detail="A payment already exists for this transaction.",
                 )
 
-            payment = PaymentModel(
-                transaction_id=transaction_id,
-                user_id=user_id,
-                amount=amount,
+            payment = PaymentModel.model_validate(
+                {
+                    "transaction_id": transaction_id,
+                    "user_id": user_id,
+                    "amount": amount,
+                }
             )
             payment.gateway_url = f"/mock-gateway/payments/{payment.payment_reference}"
             payment = await self.payment_crud.create(payment)
@@ -69,10 +76,13 @@ class PaymentController:
                 gateway_url=payment.gateway_url,
                 created_at=payment.created_at,
             )
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in PaymentController.create_payment function: %s", httperror
+            )
+            raise httperror
         except Exception as error:
-            logging.error("Error in PaymentController.create_payment: %s", error)
+            logging.error("Error in PaymentController.create_payment function: %s", error)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create payment.",
@@ -81,7 +91,7 @@ class PaymentController:
     async def send_payment_otp(self, payment_reference: str) -> PaymentOtpSendResponse:
         """Generate and store a new mock payment OTP."""
         try:
-            logging.info("Executing PaymentController.send_payment_otp")
+            logging.info("Executing PaymentController.send_payment_otp function")
             payment = await self.payment_crud.get_by_payment_reference(payment_reference)
             if payment is None:
                 logging.warning(
@@ -92,13 +102,28 @@ class PaymentController:
                     detail="Payment not found.",
                 )
 
-            plain_otp = generate_otp()
             now = datetime.now(timezone.utc)
+            if (
+                payment.payment_otp is not None
+                and (now - payment.payment_otp.requested_at).total_seconds()
+                < OTP_REQUEST_INTERVAL_SECONDS
+            ):
+                logging.warning(
+                    "Payment OTP requested too frequently for payment reference %s",
+                    payment_reference,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Please wait before requesting a new payment OTP.",
+                )
+
+            plain_otp = generate_otp()
             payment_otp = PaymentOtp(
                 code_hash=hash_otp(plain_otp),
-                expires_at=now + timedelta(minutes=10),
+                expires_at=now + timedelta(minutes=OTP_EXPIRY_MINUTES),
                 requested_at=now,
                 attempt_count=0,
+                attempt_window_started_at=now,
                 verified_at=None,
             )
             await self.payment_crud.save_payment_otp(payment, payment_otp)
@@ -111,10 +136,14 @@ class PaymentController:
                 payment_reference=payment.payment_reference,
                 otp_expires_at=payment_otp.expires_at,
             )
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in PaymentController.send_payment_otp function: %s",
+                httperror,
+            )
+            raise httperror
         except Exception as error:
-            logging.error("Error in PaymentController.send_payment_otp: %s", error)
+            logging.error("Error in PaymentController.send_payment_otp function: %s", error)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to send payment OTP.",
@@ -128,7 +157,7 @@ class PaymentController:
     ) -> PaymentOtpVerifyResponse:
         """Verify a stored payment OTP and mark the payment successful."""
         try:
-            logging.info("Executing PaymentController.verify_payment_otp")
+            logging.info("Executing PaymentController.verify_payment_otp function")
             payment = await self.payment_crud.get_by_payment_reference(payment_reference)
             if payment is None or payment.transaction_id != transaction_id:
                 logging.warning(
@@ -151,6 +180,10 @@ class PaymentController:
                 )
 
             now = datetime.now(timezone.utc)
+            payment.payment_otp = self._reset_payment_attempt_window_if_needed(
+                payment.payment_otp,
+                now,
+            )
             if payment.payment_otp.expires_at < now:
                 logging.warning(
                     "Expired payment OTP used for payment reference %s",
@@ -159,6 +192,17 @@ class PaymentController:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Payment OTP has expired. Please request a new OTP.",
+                )
+
+            if payment.payment_otp.attempt_count >= MAX_OTP_ATTEMPTS:
+                logging.warning(
+                    "Maximum payment OTP attempts exceeded for payment reference %s",
+                    payment_reference,
+                )
+                payment = await self.payment_crud.mark_failed(payment)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Maximum payment OTP verification attempts exceeded. Please request a new payment session.",
                 )
 
             if not verify_hashed_otp(otp, payment.payment_otp.code_hash):
@@ -176,6 +220,16 @@ class PaymentController:
             payment.payment_otp.verified_at = now
             await self.payment_crud.save_payment_otp(payment, payment.payment_otp)
             payment = await self.payment_crud.mark_success(payment)
+            verified_at = payment.payment_otp.verified_at
+            if verified_at is None:
+                logging.error(
+                    "Payment OTP verification timestamp missing for payment reference %s",
+                    payment_reference,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Payment OTP verification timestamp is missing.",
+                )
             logging.info(
                 "Payment OTP verified successfully for payment reference %s",
                 payment_reference,
@@ -185,12 +239,18 @@ class PaymentController:
                 transaction_id=payment.transaction_id,
                 payment_reference=payment.payment_reference,
                 payment_status=payment.payment_status.value,
-                verified_at=payment.payment_otp.verified_at,
+                verified_at=verified_at,
             )
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in PaymentController.verify_payment_otp function: %s",
+                httperror,
+            )
+            raise httperror
         except Exception as error:
-            logging.error("Error in PaymentController.verify_payment_otp: %s", error)
+            logging.error(
+                "Error in PaymentController.verify_payment_otp function: %s", error
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to verify payment OTP.",
@@ -199,7 +259,7 @@ class PaymentController:
     async def get_payment_status(self, payment_reference: str) -> PaymentStatusResponse:
         """Return payment status details for one payment reference."""
         try:
-            logging.info("Executing PaymentController.get_payment_status")
+            logging.info("Executing PaymentController.get_payment_status function")
             payment = await self.payment_crud.get_by_payment_reference(payment_reference)
             if payment is None:
                 logging.warning(
@@ -218,11 +278,29 @@ class PaymentController:
                 gateway_url=payment.gateway_url,
                 updated_at=payment.updated_at,
             )
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in PaymentController.get_payment_status function: %s",
+                httperror,
+            )
+            raise httperror
         except Exception as error:
-            logging.error("Error in PaymentController.get_payment_status: %s", error)
+            logging.error("Error in PaymentController.get_payment_status function: %s", error)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to fetch payment status.",
             )
+
+    def _reset_payment_attempt_window_if_needed(
+        self,
+        payment_otp: PaymentOtp,
+        now: datetime,
+    ) -> PaymentOtp:
+        """Reset payment OTP attempts when the active attempt window has expired."""
+
+        if (
+            now - payment_otp.attempt_window_started_at
+        ).total_seconds() >= OTP_ATTEMPT_WINDOW_SECONDS:
+            payment_otp.attempt_count = 0
+            payment_otp.attempt_window_started_at = now
+        return payment_otp
