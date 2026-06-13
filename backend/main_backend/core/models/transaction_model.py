@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import List, Optional
 from uuid import uuid4
 
 from odmantic import Field, Model
@@ -94,7 +95,7 @@ class TransactionV1(Model):
         default=TransactionStatus.FORM_SUBMITTED,
         description="Current lifecycle status of the transaction",
     )
-    status_history: list[StatusHistoryEntry] = Field(
+    status_history: List[StatusHistoryEntry] = Field(
         default_factory=lambda: [
             StatusHistoryEntry(status=TransactionStatus.FORM_SUBMITTED)
         ],
@@ -104,11 +105,11 @@ class TransactionV1(Model):
         default_factory=lambda: datetime.now(timezone.utc),
         description="Timestamp of the latest activity on the transaction",
     )
-    selected_plan_id: str | None = Field(
+    selected_plan_id: Optional[str] = Field(
         default=None,
         description="Optional selected provider plan identifier",
     )
-    completed_at: datetime | None = Field(
+    completed_at: Optional[datetime] = Field(
         default=None,
         description="Timestamp when the transaction completed successfully",
     )

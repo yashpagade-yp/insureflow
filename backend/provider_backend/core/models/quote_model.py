@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import List, Optional
 
 from odmantic import Field, Model
 from odmantic.config import ODMConfigDict
@@ -77,7 +78,7 @@ class QuoteItem(BaseModel):
 
     plan_id: str = Field(..., description="Identifier of the source insurance plan")
     company_name: str = Field(..., description="Name of the provider company")
-    logo_url: str | None = Field(
+    logo_url: Optional[str] = Field(
         default=None,
         description="Optional logo URL for the provider company",
     )
@@ -85,15 +86,15 @@ class QuoteItem(BaseModel):
     coverage_amount: float = Field(..., ge=0, description="Coverage amount of the quoted plan")
     base_premium: float = Field(..., ge=0, description="Base premium of the quoted plan")
     duration_years: int = Field(..., ge=1, description="Duration of the quoted plan in years")
-    benefits: list[str] = Field(
+    benefits: List[str] = Field(
         default_factory=list,
         description="List of benefits included in the quoted plan",
     )
-    available_add_ons: list[AvailableAddOn] = Field(
+    available_add_ons: List[AvailableAddOn] = Field(
         default_factory=list,
         description="Embedded list of add-ons available for this quote item",
     )
-    selected_add_ons: list[SelectedAddOn] = Field(
+    selected_add_ons: List[SelectedAddOn] = Field(
         default_factory=list,
         description="Embedded list of selected add-ons for this quote item",
     )
@@ -133,11 +134,11 @@ class Quote(Model):
         ...,
         description="Identifier of the related main-backend transaction",
     )
-    selected_plan_id: str | None = Field(
+    selected_plan_id: Optional[str] = Field(
         default=None,
         description="Optional selected provider plan identifier for the transaction",
     )
-    items: list[QuoteItem] = Field(
+    items: List[QuoteItem] = Field(
         default_factory=list,
         description="Embedded list of quote items generated for the transaction",
     )

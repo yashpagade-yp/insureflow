@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Optional
 from uuid import uuid4
 
 from odmantic import Field, Model
@@ -68,7 +69,7 @@ class PaymentOtp(BaseModel):
         ...,
         description="Timestamp when the current payment OTP attempt window started",
     )
-    verified_at: datetime | None = Field(
+    verified_at: Optional[datetime] = Field(
         default=None,
         description="Timestamp when the payment OTP was verified",
     )
@@ -113,11 +114,11 @@ class Payment(Model):
         default=PaymentStatus.PENDING,
         description="Current status of the payment",
     )
-    gateway_url: str | None = Field(
+    gateway_url: Optional[str] = Field(
         default=None,
         description="Mock payment gateway URL used to open the payment page",
     )
-    payment_otp: PaymentOtp | None = Field(
+    payment_otp: Optional[PaymentOtp] = Field(
         default=None,
         description="Embedded OTP state used for mock payment confirmation",
     )

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
 
-from ....commons.logger import logger
-from ...controllers.auth_controller import ProviderAuthController
-from ..schemas.request_schema.auth_request_schema import (
+from commons.logger import logger
+from core.controllers.auth_controller import ProviderAuthController
+from core.apis.schemas.request_schema.auth_request_schema import (
     ProviderAdminLoginRequest,
     ProviderAdminLoginVerifyRequest,
 )
-from ..schemas.response_schema.auth_response_schema import (
+from core.apis.schemas.response_schema.auth_response_schema import (
     ProviderAdminLoginOtpResponse,
     ProviderAdminLoginVerifyResponse,
 )

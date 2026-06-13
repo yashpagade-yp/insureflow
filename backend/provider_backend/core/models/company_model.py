@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Optional
 from uuid import uuid4
 
 from odmantic import Field, Model
@@ -71,15 +72,15 @@ class Company(Model):
         ...,
         description="Identifier of the admin who created this company record",
     )
-    contact_person_name: str | None = Field(
+    contact_person_name: Optional[str] = Field(
         default=None,
         description="Optional primary contact person for the company",
     )
-    contact_email: str | None = Field(
+    contact_email: Optional[str] = Field(
         default=None,
         description="Optional contact email for the company",
     )
-    contact_phone: str | None = Field(
+    contact_phone: Optional[str] = Field(
         default=None,
         description="Optional contact phone number for the company",
     )

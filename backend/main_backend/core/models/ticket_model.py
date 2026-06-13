@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Optional
 from uuid import uuid4
 
 from odmantic import Field, Model
@@ -74,15 +75,15 @@ class Ticket(Model):
         default=TicketStatus.OPEN,
         description="Current lifecycle status of the ticket",
     )
-    admin_id: str | None = Field(
+    admin_id: Optional[str] = Field(
         default=None,
         description="Optional identifier of the admin assigned to the ticket",
     )
-    admin_response: str | None = Field(
+    admin_response: Optional[str] = Field(
         default=None,
         description="Optional response provided by the assigned admin",
     )
-    resolved_at: datetime | None = Field(
+    resolved_at: Optional[datetime] = Field(
         default=None,
         description="Timestamp when the ticket was resolved",
     )

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from ...commons.logger import logger
-from ..database.database import get_engine
-from ..models.quote_model import QuoteItem, QuoteModel, QuoteStatus, SelectedAddOn
+from commons.logger import logger
+from core.database.database import get_engine
+from core.models.quote_model import QuoteItem, QuoteModel, QuoteStatus, SelectedAddOn
 
 logging = logger(__name__)
 

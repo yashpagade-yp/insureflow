@@ -6,16 +6,16 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 
-from ...commons.auth import generate_otp, hash_otp, verify_hashed_otp
-from ...commons.logger import logger
-from ..apis.schemas.response_schema.payment_response_schema import (
+from commons.auth import generate_otp, hash_otp, verify_hashed_otp
+from commons.logger import logger
+from core.apis.schemas.response_schema.payment_response_schema import (
     PaymentCreateResponse,
     PaymentOtpSendResponse,
     PaymentOtpVerifyResponse,
     PaymentStatusResponse,
 )
-from ..cruds.payment_crud import PaymentCrud
-from ..models.payment_model import PaymentModel, PaymentOtp
+from core.cruds.payment_crud import PaymentCrud
+from core.models.payment_model import PaymentModel, PaymentOtp
 
 logging = logger(__name__)
 

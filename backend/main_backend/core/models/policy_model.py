@@ -11,6 +11,8 @@ from datetime import date, datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
+from typing import List, Optional
+
 from odmantic import Field, Model
 from odmantic.config import ODMConfigDict
 from pydantic import BaseModel
@@ -90,7 +92,7 @@ class Policy(Model):
     plan_name: str = Field(..., description="Name of the selected insurance plan")
     coverage_amount: float = Field(..., ge=0, description="Coverage amount for the policy")
     base_premium: float = Field(..., ge=0, description="Base premium for the policy")
-    add_ons: list[PolicyAddOn] = Field(
+    add_ons: List[PolicyAddOn] = Field(
         default_factory=list,
         description="Embedded list of add-on snapshots on the issued policy",
     )
@@ -103,11 +105,11 @@ class Policy(Model):
     total_premium: float = Field(..., ge=0, description="Final total premium for the policy")
     start_date: date = Field(..., description="Policy start date")
     end_date: date = Field(..., description="Policy end date")
-    payment_reference: str | None = Field(
+    payment_reference: Optional[str] = Field(
         default=None,
         description="Optional payment reference linked to the issued policy",
     )
-    pdf_url: str | None = Field(
+    pdf_url: Optional[str] = Field(
         default=None,
         description="Optional generated PDF URL for the issued policy",
     )

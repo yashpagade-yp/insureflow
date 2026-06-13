@@ -14,7 +14,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ....models.insurance_detail_model import InsuranceType
+from core.models.insurance_detail_model import InsuranceType
 
 
 class InsuranceDetailCreateRequest(BaseModel):

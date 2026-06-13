@@ -7,9 +7,9 @@ from typing import Any
 
 from odmantic import ObjectId
 
-from ...commons.logger import logger
-from ..database.database import get_engine
-from ..models.company_model import CompanyModel
+from commons.logger import logger
+from core.database.database import get_engine
+from core.models.company_model import CompanyModel
 
 logging = logger(__name__)
 
@@ -51,6 +51,19 @@ class CompanyCrud:
             )
         except Exception as error:
             logging.error("Error in CompanyCrud.get_by_company_name function: %s", error)
+            raise
+
+    async def get_by_api_key_hash(self, api_key_hash: str) -> CompanyModel | None:
+        """Return one company by stored API key hash."""
+
+        try:
+            logging.info("Executing CompanyCrud.get_by_api_key_hash function")
+            return await self.engine.find_one(
+                CompanyModel,
+                CompanyModel.api_key_hash == api_key_hash,
+            )
+        except Exception as error:
+            logging.error("Error in CompanyCrud.get_by_api_key_hash function: %s", error)
             raise
 
     async def list_all(self) -> list[CompanyModel]:

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from odmantic import Field, Model
 from odmantic.config import ODMConfigDict
@@ -76,80 +76,80 @@ class InsuranceDetail(Model):
         description="Insurance category for the current customer journey",
     )
 
-    proposer_first_name: str | None = Field(
+    proposer_first_name: Optional[str] = Field(
         default=None,
         description="Customer first name for the current journey",
     )
-    proposer_last_name: str | None = Field(
+    proposer_last_name: Optional[str] = Field(
         default=None,
         description="Customer last name for the current journey",
     )
-    proposer_mobile_number: str | None = Field(
+    proposer_mobile_number: Optional[str] = Field(
         default=None,
         description="Customer mobile number captured in the form",
     )
-    proposer_email: str | None = Field(
+    proposer_email: Optional[str] = Field(
         default=None,
         description="Optional customer email captured in the form",
     )
-    proposer_dob: date | None = Field(
+    proposer_dob: Optional[date] = Field(
         default=None,
         description="Optional customer date of birth",
     )
-    proposer_gender: str | None = Field(
+    proposer_gender: Optional[str] = Field(
         default=None,
         description="Optional customer gender value",
     )
 
-    insured_members: list[dict[str, Any]] = Field(
+    insured_members: List[Dict[str, Any]] = Field(
         default_factory=list,
         description="Flexible list of insured-member details for the journey",
     )
-    sum_insured_requested: float | None = Field(
+    sum_insured_requested: Optional[float] = Field(
         default=None,
         ge=0,
         description="Requested coverage amount for the journey",
     )
-    policy_term_years: int | None = Field(
+    policy_term_years: Optional[int] = Field(
         default=None,
         ge=1,
         description="Requested policy term in years",
     )
-    premium_preference: str | None = Field(
+    premium_preference: Optional[str] = Field(
         default=None,
         description="Optional premium preference for the journey",
     )
 
-    occupation: str | None = Field(
+    occupation: Optional[str] = Field(
         default=None,
         description="Optional occupation used for eligibility or pricing",
     )
-    annual_income: float | None = Field(
+    annual_income: Optional[float] = Field(
         default=None,
         ge=0,
         description="Optional annual income used for eligibility checks",
     )
-    city: str | None = Field(default=None, description="Optional city used in the form")
-    state: str | None = Field(default=None, description="Optional state used in the form")
-    postal_code: str | None = Field(
+    city: Optional[str] = Field(default=None, description="Optional city used in the form")
+    state: Optional[str] = Field(default=None, description="Optional state used in the form")
+    postal_code: Optional[str] = Field(
         default=None,
         description="Optional postal code used in the form",
     )
 
-    existing_insurance_details: dict[str, Any] | None = Field(
+    existing_insurance_details: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Optional snapshot of existing insurance details",
     )
-    medical_history: dict[str, Any] | None = Field(
+    medical_history: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Optional medical history details for the journey",
     )
-    additional_answers: dict[str, Any] | None = Field(
+    additional_answers: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Optional flexible answers for product-specific questions",
     )
 
-    form_step: str | None = Field(
+    form_step: Optional[str] = Field(
         default=None,
         description="Latest saved form step for resume flow",
     )

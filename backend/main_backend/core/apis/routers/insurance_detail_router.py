@@ -7,14 +7,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
-from ....commons.auth import decodeJWT
-from ....commons.logger import logger
-from ...controllers.insurance_detail_controller import InsuranceDetailController
-from ..schemas.request_schema.insurance_detail_request_schema import (
+from commons.auth import decodeJWT
+from commons.logger import logger
+from core.controllers.insurance_detail_controller import InsuranceDetailController
+from core.apis.schemas.request_schema.insurance_detail_request_schema import (
     InsuranceDetailCreateRequest,
     InsuranceDetailUpdateRequest,
 )
-from ..schemas.response_schema.insurance_detail_response_schema import (
+from core.apis.schemas.response_schema.insurance_detail_response_schema import (
     InsuranceDetailCreateResponse,
     InsuranceDetailUpdateResponse,
     LatestIncompleteInsuranceDetailResponse,

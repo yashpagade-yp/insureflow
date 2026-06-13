@@ -12,9 +12,9 @@ from typing import Any
 
 from odmantic import ObjectId
 
-from ...commons.logger import logger
-from ..database.database import get_engine
-from ..models.provider_user_model import ProviderUserModel, ProviderUserOtp
+from commons.logger import logger
+from core.database.database import get_engine
+from core.models.provider_user_model import ProviderUserModel, ProviderUserOtp
 
 logging = logger(__name__)
 

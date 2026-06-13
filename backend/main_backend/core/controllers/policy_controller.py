@@ -7,17 +7,17 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from ...commons.logger import logger
-from ..apis.schemas.response_schema.policy_response_schema import (
+from commons.logger import logger
+from core.apis.schemas.response_schema.policy_response_schema import (
     PolicyAddOnResponse,
     PolicyListResponse,
     PolicyPdfResponse,
     PolicyResponse,
 )
-from ..cruds.policy_crud import PolicyCrud
-from ..cruds.transaction_crud import TransactionCrud
-from ..models.policy_model import PolicyAddOn, PolicyModel
-from ..models.transaction_model import TransactionStatus
+from core.cruds.policy_crud import PolicyCrud
+from core.cruds.transaction_crud import TransactionCrud
+from core.models.policy_model import PolicyAddOn, PolicyModel
+from core.models.transaction_model import TransactionStatus
 
 logging = logger(__name__)
 

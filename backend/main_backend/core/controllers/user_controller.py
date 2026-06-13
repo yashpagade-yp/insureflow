@@ -6,37 +6,37 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 
-from ...commons.auth import (
+from commons.auth import (
     generate_otp,
     hash_otp,
     signJWT,
     verify_hashed_otp,
     verify_password,
 )
-from ...commons.logger import logger
-from ..apis.schemas.request_schema.auth_request_schema import (
+from commons.logger import logger
+from core.apis.schemas.request_schema.auth_request_schema import (
     AdminLoginRequest,
     AdminLoginVerifyRequest,
 )
-from ..apis.schemas.request_schema.user_request_schema import (
+from core.apis.schemas.request_schema.user_request_schema import (
     AdminUpdateRequest,
     UserLoginOtpRequest,
     UserLoginVerifyRequest,
     UserUpdateRequest,
 )
-from ..apis.schemas.response_schema.auth_response_schema import (
+from core.apis.schemas.response_schema.auth_response_schema import (
     AdminLoginOtpResponse,
     AdminLoginVerifyResponse,
 )
-from ..apis.schemas.response_schema.user_response_schema import (
+from core.apis.schemas.response_schema.user_response_schema import (
     AdminResponse,
     UserAddressResponse,
     UserLoginOtpResponse,
     UserLoginVerifyResponse,
     UserResponse,
 )
-from ..cruds.user_crud import UserCrud
-from ..models.user_model import Address, OtpPurpose, UserModel, UserOtp
+from core.cruds.user_crud import UserCrud
+from core.models.user_model import Address, OtpPurpose, UserModel, UserOtp
 
 logging = logger(__name__)
 
