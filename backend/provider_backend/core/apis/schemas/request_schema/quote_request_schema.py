@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class QuoteGenerationRequest(BaseModel):
@@ -35,5 +37,36 @@ class QuoteGenerationRequest(BaseModel):
     policy_term_years: int | None = Field(default=None, ge=1, description="Requested policy term")
     occupation: str | None = Field(default=None, description="Optional occupation for quote rules")
     annual_income: float | None = Field(default=None, ge=0, description="Optional annual income")
-    medical_history: dict | None = Field(default=None, description="Optional medical history details")
-    additional_answers: dict | None = Field(default=None, description="Optional product-specific answers")
+    medical_history: dict[str, Any] | None = Field(default=None, description="Optional medical history details")
+    additional_answers: dict[str, Any] | None = Field(default=None, description="Optional product-specific answers")
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class QuoteSelectedAddOnRequest(BaseModel):
+    """Represents one selected add-on sent to the provider quote APIs.
+
+    Attributes:
+        name: Selected add-on name.
+        price: Selected add-on price.
+    """
+
+    name: str = Field(..., description="Selected add-on name")
+    price: float = Field(..., ge=0, description="Selected add-on price")
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class QuoteSelectAddOnsRequest(BaseModel):
+    """Request payload for saving selected add-ons for a chosen provider plan.
+
+    Attributes:
+        selected_add_ons: Selected add-ons to save for the chosen plan.
+    """
+
+    selected_add_ons: list[QuoteSelectedAddOnRequest] = Field(
+        default_factory=list,
+        description="Selected add-ons to save for the chosen plan",
+    )
+
+    model_config = ConfigDict(extra="forbid")

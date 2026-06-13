@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class AdminLoginOtpResponse(BaseModel):
@@ -19,6 +19,8 @@ class AdminLoginOtpResponse(BaseModel):
     message: str = Field(..., description="Human-readable response message")
     email: EmailStr = Field(..., description="Admin email that received the OTP")
     otp_expires_at: datetime = Field(..., description="Timestamp when the admin OTP expires")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class AdminLoginVerifyResponse(BaseModel):
@@ -37,3 +39,5 @@ class AdminLoginVerifyResponse(BaseModel):
     token_type: str = Field(default="bearer", description="Token type returned to the client")
     admin_id: str = Field(..., description="Authenticated admin identifier")
     email: EmailStr = Field(..., description="Authenticated admin email")
+
+    model_config = ConfigDict(extra="forbid")

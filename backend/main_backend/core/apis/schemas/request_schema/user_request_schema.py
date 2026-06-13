@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserAddressRequest(BaseModel):
@@ -36,6 +36,8 @@ class UserAddressRequest(BaseModel):
     postal_code: str = Field(..., description="Postal or PIN code")
     country: str = Field(..., description="Country name")
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class UserLoginOtpRequest(BaseModel):
     """Request payload for sending a login OTP to a customer's mobile number.
@@ -52,6 +54,8 @@ class UserLoginOtpRequest(BaseModel):
         min_length=10,
         description="Customer mobile number used for OTP-based login",
     )
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class UserLoginVerifyRequest(BaseModel):
@@ -73,6 +77,8 @@ class UserLoginVerifyRequest(BaseModel):
         max_length=8,
         description="Plain OTP value entered by the customer",
     )
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class UserUpdateRequest(BaseModel):
@@ -103,6 +109,8 @@ class UserUpdateRequest(BaseModel):
         description="Additional metadata about the customer",
     )
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class AdminCreateRequest(BaseModel):
     """Request payload for creating a new admin account.
@@ -125,6 +133,8 @@ class AdminCreateRequest(BaseModel):
     )
     mobile_number: str = Field(..., min_length=10, description="Admin mobile number")
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class AdminUpdateRequest(BaseModel):
     """Request payload for updating an admin's profile information.
@@ -144,3 +154,5 @@ class AdminUpdateRequest(BaseModel):
         min_length=10,
         description="Admin's contact mobile number",
     )
+
+    model_config = ConfigDict(extra="forbid")

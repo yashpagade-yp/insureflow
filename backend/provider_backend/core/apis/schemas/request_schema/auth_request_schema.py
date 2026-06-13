@@ -6,7 +6,7 @@ provider admin frontend using email, password, and OTP.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class ProviderAdminLoginRequest(BaseModel):
@@ -24,6 +24,8 @@ class ProviderAdminLoginRequest(BaseModel):
         description="Plain-text provider-admin password",
     )
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class ProviderAdminLoginVerifyRequest(BaseModel):
     """Request payload for verifying provider-admin OTP after password validation.
@@ -40,3 +42,5 @@ class ProviderAdminLoginVerifyRequest(BaseModel):
         max_length=8,
         description="Plain OTP value entered by the provider admin",
     )
+
+    model_config = ConfigDict(extra="forbid")

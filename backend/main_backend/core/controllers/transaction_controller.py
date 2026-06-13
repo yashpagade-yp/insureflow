@@ -30,7 +30,7 @@ class TransactionController:
     async def get_transaction(self, transaction_id: str) -> TransactionResponse:
         """Return one transaction by business transaction id."""
         try:
-            logging.info("Executing TransactionController.get_transaction")
+            logging.info("Executing TransactionController.get_transaction function")
             transaction = await self.transaction_crud.get_by_transaction_id(transaction_id)
             if transaction is None:
                 logging.warning("Transaction not found for id %s", transaction_id)
@@ -39,10 +39,16 @@ class TransactionController:
                     detail="Transaction not found.",
                 )
             return self._build_response(transaction)
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in TransactionController.get_transaction function: %s",
+                httperror,
+            )
+            raise httperror
         except Exception as error:
-            logging.error("Error in TransactionController.get_transaction: %s", error)
+            logging.error(
+                "Error in TransactionController.get_transaction function: %s", error
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to fetch transaction.",
@@ -51,17 +57,24 @@ class TransactionController:
     async def list_user_transactions(self, user_id: str) -> TransactionListResponse:
         """Return all transactions for one user."""
         try:
-            logging.info("Executing TransactionController.list_user_transactions")
+            logging.info(
+                "Executing TransactionController.list_user_transactions function"
+            )
             transactions = await self.transaction_crud.list_by_user_id(user_id)
             return TransactionListResponse(
                 items=[self._build_response(item) for item in transactions],
                 total_count=len(transactions),
             )
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in TransactionController.list_user_transactions function: %s",
+                httperror,
+            )
+            raise httperror
         except Exception as error:
             logging.error(
-                "Error in TransactionController.list_user_transactions: %s", error
+                "Error in TransactionController.list_user_transactions function: %s",
+                error,
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -71,7 +84,7 @@ class TransactionController:
     async def select_plan(self, payload: QuoteSelectPlanRequest) -> TransactionResponse:
         """Save the selected provider plan on a transaction."""
         try:
-            logging.info("Executing TransactionController.select_plan")
+            logging.info("Executing TransactionController.select_plan function")
             transaction = await self.transaction_crud.get_by_transaction_id(
                 payload.transaction_id
             )
@@ -94,10 +107,13 @@ class TransactionController:
                 TransactionStatus.OFFER_SELECTED,
             )
             return self._build_response(transaction)
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in TransactionController.select_plan function: %s", httperror
+            )
+            raise httperror
         except Exception as error:
-            logging.error("Error in TransactionController.select_plan: %s", error)
+            logging.error("Error in TransactionController.select_plan function: %s", error)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to select transaction plan.",
@@ -109,7 +125,9 @@ class TransactionController:
     ) -> TransactionResponse:
         """Move the transaction to add-on selected state."""
         try:
-            logging.info("Executing TransactionController.save_selected_add_ons")
+            logging.info(
+                "Executing TransactionController.save_selected_add_ons function"
+            )
             transaction = await self.transaction_crud.get_by_transaction_id(
                 payload.transaction_id
             )
@@ -134,11 +152,15 @@ class TransactionController:
                 TransactionStatus.ADD_ONS_SELECTED,
             )
             return self._build_response(transaction)
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in TransactionController.save_selected_add_ons function: %s",
+                httperror,
+            )
+            raise httperror
         except Exception as error:
             logging.error(
-                "Error in TransactionController.save_selected_add_ons: %s",
+                "Error in TransactionController.save_selected_add_ons function: %s",
                 error,
             )
             raise HTTPException(

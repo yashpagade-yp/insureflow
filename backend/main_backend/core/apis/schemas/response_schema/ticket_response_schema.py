@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TicketResponse(BaseModel):
@@ -36,6 +36,8 @@ class TicketResponse(BaseModel):
     created_at: datetime = Field(..., description="Ticket creation timestamp")
     updated_at: datetime = Field(..., description="Ticket last-update timestamp")
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class TicketListResponse(BaseModel):
     """Represents a list of support tickets for a user or admin view.
@@ -47,3 +49,5 @@ class TicketListResponse(BaseModel):
 
     items: list[TicketResponse] = Field(default_factory=list, description="List of tickets")
     total_count: int = Field(..., ge=0, description="Total number of tickets returned")
+
+    model_config = ConfigDict(extra="forbid")

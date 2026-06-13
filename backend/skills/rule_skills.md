@@ -10,6 +10,10 @@ description: Use this skill whenever writing or reviewing backend code for this 
 This skill defines the coding rules that must be followed while writing,
 reviewing, or refactoring backend code in this project.
 
+This file is the rulebook.
+The companion file `reference_firm_backend_patterns.md` is the concrete pattern
+reference derived from the firm's sample snippets.
+
 Use this skill for:
 
 - models
@@ -259,3 +263,7 @@ Before finishing code, check:
 
 Whenever backend code is created or reviewed for this project, apply this skill
 before finalizing the implementation.
+
+Also check `reference_firm_backend_patterns.md` so the final code matches the
+firm's real implementation style, especially for routers, controllers, CRUD,
+logging, and exception handling.

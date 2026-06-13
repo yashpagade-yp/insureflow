@@ -42,45 +42,52 @@ class InsuranceDetailController:
     ) -> InsuranceDetailCreateResponse:
         """Create or find a user, create a transaction, and save insurance detail."""
         try:
-            logging.info("Executing InsuranceDetailController.create_insurance_detail_journey")
-            user = await self.user_crud.get_by_mobile_number(payload.mobile_number)
+            logging.info(
+                "Executing InsuranceDetailController.create_insurance_detail_journey function"
+            )
+            normalized_mobile_number = payload.mobile_number.strip()
+            user = await self.user_crud.get_by_mobile_number(normalized_mobile_number)
             if user is None:
                 user = await self.user_crud.create(
-                    UserModel(
-                        mobile_number=payload.mobile_number,
-                        first_name=payload.proposer_first_name or "Guest",
-                        last_name=payload.proposer_last_name or "User",
+                    UserModel.model_validate(
+                        {
+                            "mobile_number": normalized_mobile_number,
+                            "first_name": payload.proposer_first_name or "Guest",
+                            "last_name": payload.proposer_last_name or "User",
+                        }
                     )
                 )
 
             transaction = await self.transaction_crud.create(
-                TransactionModel(user_id=str(user.id))
+                TransactionModel.model_validate({"user_id": str(user.id)})
             )
             insurance_detail = await self.insurance_detail_crud.create(
-                InsuranceDetailModel(
-                    transaction_id=transaction.transaction_id,
-                    user_id=str(user.id),
-                    insurance_type=payload.insurance_type,
-                    proposer_first_name=payload.proposer_first_name,
-                    proposer_last_name=payload.proposer_last_name,
-                    proposer_mobile_number=payload.mobile_number,
-                    proposer_email=payload.proposer_email,
-                    proposer_dob=payload.proposer_dob,
-                    proposer_gender=payload.proposer_gender,
-                    insured_members=payload.insured_members,
-                    sum_insured_requested=payload.sum_insured_requested,
-                    policy_term_years=payload.policy_term_years,
-                    premium_preference=payload.premium_preference,
-                    occupation=payload.occupation,
-                    annual_income=payload.annual_income,
-                    city=payload.city,
-                    state=payload.state,
-                    postal_code=payload.postal_code,
-                    existing_insurance_details=payload.existing_insurance_details,
-                    medical_history=payload.medical_history,
-                    additional_answers=payload.additional_answers,
-                    form_step=payload.form_step,
-                    is_form_completed=payload.is_form_completed,
+                InsuranceDetailModel.model_validate(
+                    {
+                        "transaction_id": transaction.transaction_id,
+                        "user_id": str(user.id),
+                        "insurance_type": payload.insurance_type,
+                        "proposer_first_name": payload.proposer_first_name,
+                        "proposer_last_name": payload.proposer_last_name,
+                        "proposer_mobile_number": normalized_mobile_number,
+                        "proposer_email": payload.proposer_email,
+                        "proposer_dob": payload.proposer_dob,
+                        "proposer_gender": payload.proposer_gender,
+                        "insured_members": payload.insured_members,
+                        "sum_insured_requested": payload.sum_insured_requested,
+                        "policy_term_years": payload.policy_term_years,
+                        "premium_preference": payload.premium_preference,
+                        "occupation": payload.occupation,
+                        "annual_income": payload.annual_income,
+                        "city": payload.city,
+                        "state": payload.state,
+                        "postal_code": payload.postal_code,
+                        "existing_insurance_details": payload.existing_insurance_details,
+                        "medical_history": payload.medical_history,
+                        "additional_answers": payload.additional_answers,
+                        "form_step": payload.form_step,
+                        "is_form_completed": payload.is_form_completed,
+                    }
                 )
             )
 
@@ -95,11 +102,15 @@ class InsuranceDetailController:
                 current_status=transaction.current_status,
                 form_step=insurance_detail.form_step,
             )
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in InsuranceDetailController.create_insurance_detail_journey function: %s",
+                httperror,
+            )
+            raise httperror
         except Exception as error:
             logging.error(
-                "Error in InsuranceDetailController.create_insurance_detail_journey: %s",
+                "Error in InsuranceDetailController.create_insurance_detail_journey function: %s",
                 error,
             )
             raise HTTPException(
@@ -114,7 +125,9 @@ class InsuranceDetailController:
     ) -> InsuranceDetailUpdateResponse:
         """Update a transaction-linked insurance-detail snapshot."""
         try:
-            logging.info("Executing InsuranceDetailController.update_insurance_detail")
+            logging.info(
+                "Executing InsuranceDetailController.update_insurance_detail function"
+            )
             transaction = await self.transaction_crud.get_by_transaction_id(transaction_id)
             if transaction is None:
                 logging.warning("Transaction not found for id %s", transaction_id)
@@ -156,11 +169,15 @@ class InsuranceDetailController:
                 current_status=transaction.current_status,
                 form_step=insurance_detail.form_step,
             )
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in InsuranceDetailController.update_insurance_detail function: %s",
+                httperror,
+            )
+            raise httperror
         except Exception as error:
             logging.error(
-                "Error in InsuranceDetailController.update_insurance_detail: %s",
+                "Error in InsuranceDetailController.update_insurance_detail function: %s",
                 error,
             )
             raise HTTPException(
@@ -174,11 +191,14 @@ class InsuranceDetailController:
     ) -> LatestIncompleteInsuranceDetailResponse:
         """Return the latest incomplete journey for one mobile number."""
         try:
-            logging.info("Executing InsuranceDetailController.get_latest_incomplete_journey")
-            user = await self.user_crud.get_by_mobile_number(mobile_number)
+            logging.info(
+                "Executing InsuranceDetailController.get_latest_incomplete_journey function"
+            )
+            normalized_mobile_number = mobile_number.strip()
+            user = await self.user_crud.get_by_mobile_number(normalized_mobile_number)
             if user is None:
                 logging.warning(
-                    "User not found for mobile number %s", mobile_number
+                    "User not found for mobile number %s", normalized_mobile_number
                 )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -219,11 +239,15 @@ class InsuranceDetailController:
                 last_active_at=transaction.last_active_at,
                 insurance_detail_id=str(insurance_detail.id),
             )
-        except HTTPException:
-            raise
+        except HTTPException as httperror:
+            logging.error(
+                "Error in InsuranceDetailController.get_latest_incomplete_journey function: %s",
+                httperror,
+            )
+            raise httperror
         except Exception as error:
             logging.error(
-                "Error in InsuranceDetailController.get_latest_incomplete_journey: %s",
+                "Error in InsuranceDetailController.get_latest_incomplete_journey function: %s",
                 error,
             )
             raise HTTPException(

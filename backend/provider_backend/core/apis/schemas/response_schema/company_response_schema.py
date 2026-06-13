@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CompanyResponse(BaseModel):
@@ -28,6 +28,8 @@ class CompanyResponse(BaseModel):
     created_at: datetime = Field(..., description="Company creation timestamp")
     updated_at: datetime = Field(..., description="Company last-update timestamp")
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class CompanyCreateResponse(BaseModel):
     """Response payload returned after registering a company.
@@ -45,6 +47,8 @@ class CompanyCreateResponse(BaseModel):
         description="Plain API key returned one time during registration",
     )
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class CompanyListResponse(BaseModel):
     """Represents a list of registered companies.
@@ -56,3 +60,5 @@ class CompanyListResponse(BaseModel):
 
     items: list[CompanyResponse] = Field(default_factory=list, description="List of companies")
     total_count: int = Field(..., ge=0, description="Total number of returned companies")
+
+    model_config = ConfigDict(extra="forbid")

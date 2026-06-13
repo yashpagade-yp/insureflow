@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PlanAddOnRequest(BaseModel):
@@ -17,6 +17,8 @@ class PlanAddOnRequest(BaseModel):
     name: str = Field(..., description="Add-on name")
     description: str = Field(..., description="Add-on description")
     price: float = Field(..., ge=0, description="Add-on price")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class PlanCreateRequest(BaseModel):
@@ -51,6 +53,8 @@ class PlanCreateRequest(BaseModel):
         description="Available add-ons for the plan",
     )
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class PlanUpdateRequest(BaseModel):
     """Request payload for updating a provider insurance plan.
@@ -79,3 +83,5 @@ class PlanUpdateRequest(BaseModel):
         default=None,
         description="Updated available add-ons",
     )
+
+    model_config = ConfigDict(extra="forbid")

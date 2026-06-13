@@ -44,6 +44,8 @@ class PaymentOtp(BaseModel):
         expires_at: Timestamp when the payment OTP becomes invalid.
         requested_at: Timestamp when the payment OTP was generated.
         attempt_count: Number of failed verification attempts.
+        attempt_window_started_at: Timestamp when the current payment OTP
+            attempt window started.
         verified_at: Timestamp when the payment OTP was successfully verified.
     """
 
@@ -61,6 +63,10 @@ class PaymentOtp(BaseModel):
         ge=0,
         le=5,
         description="Number of failed payment OTP verification attempts",
+    )
+    attempt_window_started_at: datetime = Field(
+        ...,
+        description="Timestamp when the current payment OTP attempt window started",
     )
     verified_at: datetime | None = Field(
         default=None,

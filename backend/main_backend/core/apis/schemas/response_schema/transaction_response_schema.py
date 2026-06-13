@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ....models.transaction_model import TransactionStatus
 
@@ -38,6 +38,8 @@ class TransactionResponse(BaseModel):
     created_at: datetime = Field(..., description="Transaction creation timestamp")
     updated_at: datetime = Field(..., description="Transaction last-update timestamp")
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class TransactionListResponse(BaseModel):
     """Represents a list of transactions returned for a user.
@@ -52,3 +54,5 @@ class TransactionListResponse(BaseModel):
         description="List of transactions",
     )
     total_count: int = Field(..., ge=0, description="Total number of returned transactions")
+
+    model_config = ConfigDict(extra="forbid")
