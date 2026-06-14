@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 
-from commons.auth import generate_otp, hash_otp, verify_hashed_otp
+from commons.auth import generate_otp, hash_otp, log_otp_for_dev, verify_hashed_otp
 from commons.logger import logger
 from core.apis.schemas.response_schema.payment_response_schema import (
     PaymentCreateResponse,
@@ -103,6 +103,11 @@ class PaymentController:
                 )
 
             now = datetime.now(timezone.utc)
+            if payment.payment_otp is not None:
+                payment.payment_otp = self._reset_payment_attempt_window_if_needed(
+                    payment.payment_otp,
+                    now,
+                )
             if (
                 payment.payment_otp is not None
                 and (now - payment.payment_otp.requested_at).total_seconds()
@@ -118,6 +123,11 @@ class PaymentController:
                 )
 
             plain_otp = generate_otp()
+            log_otp_for_dev(
+                flow_name="payment_verification",
+                recipient=payment_reference,
+                otp=plain_otp,
+            )
             payment_otp = PaymentOtp(
                 code_hash=hash_otp(plain_otp),
                 expires_at=now + timedelta(minutes=OTP_EXPIRY_MINUTES),
@@ -298,9 +308,23 @@ class PaymentController:
     ) -> PaymentOtp:
         """Reset payment OTP attempts when the active attempt window has expired."""
 
+        payment_otp.requested_at = self._ensure_utc_datetime(payment_otp.requested_at)
+        payment_otp.expires_at = self._ensure_utc_datetime(payment_otp.expires_at)
+        payment_otp.attempt_window_started_at = self._ensure_utc_datetime(
+            payment_otp.attempt_window_started_at
+        )
+        if payment_otp.verified_at is not None:
+            payment_otp.verified_at = self._ensure_utc_datetime(payment_otp.verified_at)
         if (
             now - payment_otp.attempt_window_started_at
         ).total_seconds() >= OTP_ATTEMPT_WINDOW_SECONDS:
             payment_otp.attempt_count = 0
             payment_otp.attempt_window_started_at = now
         return payment_otp
+
+    def _ensure_utc_datetime(self, value: datetime) -> datetime:
+        """Normalize stored datetimes so comparisons always use UTC-aware values."""
+
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
