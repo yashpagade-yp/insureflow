@@ -9,10 +9,12 @@ from fastapi import HTTPException, status
 from commons.auth import (
     generate_otp,
     hash_otp,
+    log_otp_for_dev,
     sign_jwt,
     verify_hashed_otp,
     verify_password,
 )
+from commons.email import send_admin_otp_email
 from commons.logger import logger
 from core.apis.schemas.request_schema.auth_request_schema import (
     ProviderAdminLoginRequest,
@@ -81,6 +83,11 @@ class ProviderAuthController:
                 )
 
             now = datetime.now(timezone.utc)
+            if provider_user.otp is not None:
+                provider_user.otp = self._reset_otp_attempt_window_if_needed(
+                    provider_user.otp,
+                    now,
+                )
             if (
                 provider_user.otp is not None
                 and provider_user.otp.purpose == ProviderOtpPurpose.ADMIN_LOGIN
@@ -97,6 +104,11 @@ class ProviderAuthController:
                 )
 
             plain_otp = generate_otp()
+            log_otp_for_dev(
+                flow_name="provider_admin_login",
+                recipient=normalized_email,
+                otp=plain_otp,
+            )
             otp_state = ProviderUserOtp(
                 code_hash=hash_otp(plain_otp),
                 purpose=ProviderOtpPurpose.ADMIN_LOGIN,
@@ -106,6 +118,19 @@ class ProviderAuthController:
                 attempt_window_started_at=now,
             )
             await self.provider_user_crud.save_otp(provider_user, otp_state)
+            try:
+                send_admin_otp_email(normalized_email, plain_otp)
+            except Exception as error:
+                await self.provider_user_crud.clear_otp(provider_user)
+                logging.error(
+                    "Failed to deliver provider-admin OTP email for %s: %s",
+                    normalized_email,
+                    error,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to deliver provider-admin OTP email.",
+                )
             logging.info(
                 "Provider-admin OTP generated successfully for email %s",
                 normalized_email,
@@ -236,9 +261,21 @@ class ProviderAuthController:
     ) -> ProviderUserOtp:
         """Reset provider-admin OTP attempts when the active window has expired."""
 
+        otp_state.requested_at = self._ensure_utc_datetime(otp_state.requested_at)
+        otp_state.expires_at = self._ensure_utc_datetime(otp_state.expires_at)
+        otp_state.attempt_window_started_at = self._ensure_utc_datetime(
+            otp_state.attempt_window_started_at
+        )
         if (
             now - otp_state.attempt_window_started_at
         ).total_seconds() >= OTP_ATTEMPT_WINDOW_SECONDS:
             otp_state.attempt_count = 0
             otp_state.attempt_window_started_at = now
         return otp_state
+
+    def _ensure_utc_datetime(self, value: datetime) -> datetime:
+        """Normalize stored datetimes so comparisons always use UTC-aware values."""
+
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)

@@ -9,10 +9,12 @@ from fastapi import HTTPException, status
 from commons.auth import (
     generate_otp,
     hash_otp,
+    log_otp_for_dev,
     signJWT,
     verify_hashed_otp,
     verify_password,
 )
+from commons.email import send_admin_otp_email
 from commons.logger import logger
 from core.apis.schemas.request_schema.auth_request_schema import (
     AdminLoginRequest,
@@ -75,6 +77,8 @@ class UserController:
                 )
 
             now = datetime.now(timezone.utc)
+            if user.otp is not None:
+                user.otp = self._reset_otp_attempt_window_if_needed(user.otp, now)
             if (
                 user.otp is not None
                 and user.otp.purpose == OtpPurpose.USER_LOGIN
@@ -91,6 +95,11 @@ class UserController:
                 )
 
             plain_otp = generate_otp()
+            log_otp_for_dev(
+                flow_name="customer_login",
+                recipient=normalized_mobile_number,
+                otp=plain_otp,
+            )
             otp_state = UserOtp(
                 code_hash=hash_otp(plain_otp),
                 purpose=OtpPurpose.USER_LOGIN,
@@ -231,6 +240,11 @@ class UserController:
                 )
 
             now = datetime.now(timezone.utc)
+            if admin_user.otp is not None:
+                admin_user.otp = self._reset_otp_attempt_window_if_needed(
+                    admin_user.otp,
+                    now,
+                )
             if (
                 admin_user.otp is not None
                 and admin_user.otp.purpose == OtpPurpose.ADMIN_LOGIN
@@ -247,6 +261,11 @@ class UserController:
                 )
 
             plain_otp = generate_otp()
+            log_otp_for_dev(
+                flow_name="main_admin_login",
+                recipient=normalized_email,
+                otp=plain_otp,
+            )
             otp_state = UserOtp(
                 code_hash=hash_otp(plain_otp),
                 purpose=OtpPurpose.ADMIN_LOGIN,
@@ -256,6 +275,19 @@ class UserController:
                 attempt_window_started_at=now,
             )
             await self.user_crud.save_otp(admin_user, otp_state)
+            try:
+                send_admin_otp_email(normalized_email, plain_otp)
+            except Exception as error:
+                await self.user_crud.clear_otp(admin_user)
+                logging.error(
+                    "Failed to deliver admin OTP email for %s: %s",
+                    normalized_email,
+                    error,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to deliver admin login OTP email.",
+                )
             logging.info(
                 "Admin login OTP generated successfully for email %s",
                 normalized_email,
@@ -375,12 +407,24 @@ class UserController:
     ) -> UserOtp:
         """Reset OTP attempt tracking when the active attempt window has expired."""
 
+        otp_state.requested_at = self._ensure_utc_datetime(otp_state.requested_at)
+        otp_state.expires_at = self._ensure_utc_datetime(otp_state.expires_at)
+        otp_state.attempt_window_started_at = self._ensure_utc_datetime(
+            otp_state.attempt_window_started_at
+        )
         if (
             now - otp_state.attempt_window_started_at
         ).total_seconds() >= OTP_ATTEMPT_WINDOW_SECONDS:
             otp_state.attempt_count = 0
             otp_state.attempt_window_started_at = now
         return otp_state
+
+    def _ensure_utc_datetime(self, value: datetime) -> datetime:
+        """Normalize stored datetimes so comparisons always use UTC-aware values."""
+
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
     async def get_user_profile(self, user_id: str) -> UserResponse:
         """Return one user profile."""

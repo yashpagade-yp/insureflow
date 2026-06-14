@@ -7,16 +7,20 @@ import os
 import secrets
 import time
 from pathlib import Path
+from typing import Any
 
 import jwt
 from dotenv import load_dotenv
 from passlib.context import CryptContext
+
+from commons.logger import logger
 
 
 ENV_FILE_PATH = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(dotenv_path=ENV_FILE_PATH)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logging = logger(__name__)
 
 JWT_SECRET = os.environ.get("JWT_SECRET_KEY")
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
@@ -24,6 +28,9 @@ JWT_EXPIRY_HOURS = int(os.environ.get("JWT_EXPIRY_HOURS", "24"))
 OTP_SECRET = os.environ.get("OTP_SECRET_KEY") or os.environ.get(
     "JWT_SECRET_KEY",
     "insureflow-provider-otp-secret",
+)
+SHOW_PLAIN_OTP_IN_LOGS = (
+    os.environ.get("SHOW_PLAIN_OTP_IN_LOGS", "false").strip().lower() == "true"
 )
 
 if not JWT_SECRET:
@@ -58,7 +65,7 @@ def sign_jwt(user_role: str, user_id: str, expiry_duration: int | None = None) -
     return signJWT(user_role=user_role, id=user_id, expiry_duration=expiry_duration)
 
 
-def decodeJWT(token: str) -> dict | None:
+def decodeJWT(token: str) -> dict[str, Any] | None:
     """
     Decode and validate a JWT token.
 
@@ -72,7 +79,7 @@ def decodeJWT(token: str) -> dict | None:
         return None
 
 
-def decode_jwt(token: str) -> dict | None:
+def decode_jwt(token: str) -> dict[str, Any] | None:
     """Decode and validate a provider-backend JWT token."""
 
     return decodeJWT(token)
@@ -107,3 +114,15 @@ def verify_hashed_otp(plain_otp: str, hashed_otp: str) -> bool:
     """Compare a plain OTP against its hashed representation."""
 
     return secrets.compare_digest(hash_otp(plain_otp), hashed_otp)
+
+
+def log_otp_for_dev(flow_name: str, recipient: str, otp: str) -> None:
+    """Log the generated OTP only when development visibility is enabled."""
+
+    if SHOW_PLAIN_OTP_IN_LOGS:
+        logging.warning(
+            "DEV ONLY OTP | flow=%s | recipient=%s | otp=%s",
+            flow_name,
+            recipient,
+            otp,
+        )
