@@ -52,7 +52,7 @@ async def generate_quotes(
         logging.error("Error in /v1/quotes/generate endpoint: %s", error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to generate quotes.",
         )
 
 
@@ -101,7 +101,7 @@ async def select_plan(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to select quote plan.",
         )
 
 
@@ -158,7 +158,7 @@ async def save_selected_add_ons(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to save selected add-ons.",
         )
 
 
@@ -198,5 +198,5 @@ async def get_quote(
         logging.error("Error in /v1/quotes/%s endpoint: %s", transaction_id, error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to fetch quote.",
         )

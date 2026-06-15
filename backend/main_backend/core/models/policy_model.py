@@ -76,6 +76,7 @@ class Policy(Model):
         policy_status: Current policy status.
         issued_at: UTC timestamp when the policy was issued.
         created_at: UTC timestamp when the policy was created.
+        updated_at: UTC timestamp when the policy was last updated.
     """
 
     policy_number: str = Field(
@@ -124,6 +125,10 @@ class Policy(Model):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         description="Timestamp when the policy was created",
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Timestamp when the policy was last updated",
     )
 
     model_config = ODMConfigDict(

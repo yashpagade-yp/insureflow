@@ -50,7 +50,19 @@ class ProviderAuthController:
         self,
         payload: ProviderAdminLoginRequest,
     ) -> ProviderAdminLoginOtpResponse:
-        """Validate password and create a fresh login OTP for a provider admin."""
+        """Validate password and create a fresh login OTP for a provider admin.
+
+        Args:
+            payload: Provider-admin login payload containing email and password.
+
+        Returns:
+            ProviderAdminLoginOtpResponse: OTP-generation response for the
+                provider-admin login flow.
+
+        Raises:
+            HTTPException: If credentials are invalid or the login OTP flow
+                cannot be started.
+        """
         try:
             logging.info("Executing ProviderAuthController.start_login function")
             normalized_email = payload.email.strip().lower()
@@ -160,7 +172,19 @@ class ProviderAuthController:
         self,
         payload: ProviderAdminLoginVerifyRequest,
     ) -> ProviderAdminLoginVerifyResponse:
-        """Verify provider-admin OTP and issue a JWT."""
+        """Verify provider-admin OTP and issue a JWT.
+
+        Args:
+            payload: Provider-admin OTP verification payload.
+
+        Returns:
+            ProviderAdminLoginVerifyResponse: Authenticated provider-admin token
+                response.
+
+        Raises:
+            HTTPException: If the OTP is invalid, expired, or verification
+                fails.
+        """
         try:
             logging.info("Executing ProviderAuthController.verify_login function")
             normalized_email = payload.email.strip().lower()

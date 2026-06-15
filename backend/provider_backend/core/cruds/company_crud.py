@@ -36,6 +36,10 @@ class CompanyCrud:
         """Return one company by ODMantic object id."""
         try:
             logging.info("Executing CompanyCrud.get_by_id function")
+            if isinstance(object_id, str):
+                if len(object_id) != 24:
+                    return None
+                object_id = ObjectId(object_id)
             return await self.engine.find_one(CompanyModel, CompanyModel.id == object_id)
         except Exception as error:
             logging.error("Error in CompanyCrud.get_by_id function: %s", error)

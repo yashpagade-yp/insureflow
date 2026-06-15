@@ -47,7 +47,7 @@ async def start_provider_admin_login(
         logging.error("Error in /v1/provider-auth/login endpoint: %s", error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to start provider-admin login.",
         )
 
 
@@ -81,5 +81,5 @@ async def verify_provider_admin_login(
         logging.error("Error in /v1/provider-auth/verify-otp endpoint: %s", error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to verify provider-admin login OTP.",
         )

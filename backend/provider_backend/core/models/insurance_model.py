@@ -1,4 +1,4 @@
-"""Insurance plan models for the InsureFlow provider backend.also frontend
+"""Insurance plan models for the InsureFlow provider backend.
 
 This module contains the provider-side insurance plan document model and the
 embedded add-on model stored inside each plan. The structure follows the

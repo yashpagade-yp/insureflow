@@ -61,7 +61,7 @@ async def create_payment(
         logging.error("Error in /v1/payments endpoint: %s", error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to create payment.",
         )
 
 
@@ -105,7 +105,7 @@ async def send_payment_otp(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to send payment OTP.",
         )
 
 
@@ -145,7 +145,7 @@ async def verify_payment_otp(
         logging.error("Error in /v1/payments/verify-otp endpoint: %s", error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to verify payment OTP.",
         )
 
 
@@ -189,5 +189,5 @@ async def get_payment_status(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to fetch payment status.",
         )

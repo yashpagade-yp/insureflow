@@ -81,7 +81,7 @@ async def create_plan(
         logging.error("Error in /v1/plans endpoint: %s", error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to create provider insurance plan.",
         )
 
 
@@ -117,7 +117,7 @@ async def update_plan(
         logging.error("Error in /v1/plans/%s endpoint: %s", plan_code, error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to update provider insurance plan.",
         )
 
 
@@ -147,7 +147,7 @@ async def list_plans(token: str = Depends(oauth2_scheme)) -> PlanListResponse:
         logging.error("Error in /v1/plans endpoint: %s", error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to list provider insurance plans.",
         )
 
 
@@ -181,5 +181,5 @@ async def get_plan(
         logging.error("Error in /v1/plans/%s endpoint: %s", plan_code, error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to fetch provider insurance plan.",
         )

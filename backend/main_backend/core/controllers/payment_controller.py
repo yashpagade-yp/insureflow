@@ -34,23 +34,53 @@ class PaymentController:
         self.policy_controller = PolicyController()
 
     async def create_payment(self, payload: PaymentCreateRequest) -> PaymentCreateResponse:
-        """Create a provider-side payment record and mark the transaction pending."""
+        """Create a provider-side payment record and mark the transaction pending.
+
+        Args:
+            payload: Transaction id, user id, and amount for the payment flow.
+
+        Returns:
+            PaymentCreateResponse: Payment record created by the provider
+                backend and mapped into the main-backend schema.
+
+        Raises:
+            HTTPException: If identifiers are invalid, the transaction does not
+                exist, or the provider payment cannot be created.
+        """
 
         try:
             logging.info("Executing PaymentController.create_payment function")
+            normalized_transaction_id = payload.transaction_id.strip()
+            normalized_user_id = payload.user_id.strip()
+            if not normalized_transaction_id or not normalized_user_id:
+                logging.warning("Payment creation received empty identifiers")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Transaction id and user id are required.",
+                )
+
+            transaction = await self.transaction_crud.get_by_transaction_id(
+                normalized_transaction_id
+            )
+            if transaction is None:
+                logging.warning(
+                    "Transaction %s not found during payment creation",
+                    normalized_transaction_id,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Transaction not found.",
+                )
+
             provider_response = await self.provider_service.create_payment(
-                transaction_id=payload.transaction_id,
-                user_id=payload.user_id,
+                transaction_id=normalized_transaction_id,
+                user_id=normalized_user_id,
                 amount=payload.amount,
             )
-            transaction = await self.transaction_crud.get_by_transaction_id(
-                payload.transaction_id
+            await self.transaction_crud.update_status(
+                transaction,
+                TransactionStatus.PAYMENT_PENDING,
             )
-            if transaction is not None:
-                await self.transaction_crud.update_status(
-                    transaction,
-                    TransactionStatus.PAYMENT_PENDING,
-                )
 
             return PaymentCreateResponse(
                 message=provider_response["message"],
@@ -75,12 +105,30 @@ class PaymentController:
             )
 
     async def send_payment_otp(self, payment_reference: str) -> PaymentOtpSendResponse:
-        """Trigger provider-side payment OTP generation."""
+        """Trigger provider-side payment OTP generation.
+
+        Args:
+            payment_reference: Business payment reference for the payment flow.
+
+        Returns:
+            PaymentOtpSendResponse: Provider payment-OTP generation response.
+
+        Raises:
+            HTTPException: If the payment reference is invalid or OTP generation
+                fails.
+        """
 
         try:
             logging.info("Executing PaymentController.send_payment_otp function")
+            normalized_payment_reference = payment_reference.strip()
+            if not normalized_payment_reference:
+                logging.warning("Empty payment_reference provided for OTP send")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Payment reference is required.",
+                )
             provider_response = await self.provider_service.send_payment_otp(
-                payment_reference
+                normalized_payment_reference
             )
             return PaymentOtpSendResponse(
                 message=provider_response["message"],
@@ -105,17 +153,44 @@ class PaymentController:
         self,
         payload: PaymentOtpVerifyRequest,
     ) -> PaymentOtpVerifyResponse:
-        """Verify provider-side payment OTP and issue a local policy on success."""
+        """Verify provider-side payment OTP and issue a local policy on success.
+
+        Args:
+            payload: Transaction id, payment reference, and OTP for payment
+                verification.
+
+        Returns:
+            PaymentOtpVerifyResponse: Verified payment response including the
+                issued local policy number.
+
+        Raises:
+            HTTPException: If verification input is invalid, payment verification
+                fails, or policy issuance cannot be completed.
+        """
 
         try:
             logging.info("Executing PaymentController.verify_payment_otp function")
+            normalized_transaction_id = payload.transaction_id.strip()
+            normalized_payment_reference = payload.payment_reference.strip()
+            normalized_otp = payload.otp.strip()
+            if (
+                not normalized_transaction_id
+                or not normalized_payment_reference
+                or not normalized_otp
+            ):
+                logging.warning("Payment OTP verification received empty values")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Transaction id, payment reference, and OTP are required.",
+                )
+
             transaction = await self.transaction_crud.get_by_transaction_id(
-                payload.transaction_id
+                normalized_transaction_id
             )
             if transaction is None:
                 logging.warning(
                     "Transaction %s not found during payment OTP verification",
-                    payload.transaction_id,
+                    normalized_transaction_id,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -123,16 +198,18 @@ class PaymentController:
                 )
 
             provider_response = await self.provider_service.verify_payment_otp(
-                transaction_id=payload.transaction_id,
-                payment_reference=payload.payment_reference,
-                otp=payload.otp,
+                transaction_id=normalized_transaction_id,
+                payment_reference=normalized_payment_reference,
+                otp=normalized_otp,
             )
-            quote_response = await self.provider_service.get_quotes(payload.transaction_id)
+            quote_response = await self.provider_service.get_quotes(
+                normalized_transaction_id
+            )
             selected_plan_id = quote_response.get("selected_plan_id")
             if not selected_plan_id:
                 logging.warning(
                     "Selected plan missing for transaction %s during policy issuance",
-                    payload.transaction_id,
+                    normalized_transaction_id,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -151,7 +228,7 @@ class PaymentController:
                 logging.warning(
                     "Selected quote item %s missing for transaction %s",
                     selected_plan_id,
-                    payload.transaction_id,
+                    normalized_transaction_id,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -159,7 +236,7 @@ class PaymentController:
                 )
 
             policy_response = await self.policy_controller.issue_policy(
-                transaction_id=payload.transaction_id,
+                transaction_id=normalized_transaction_id,
                 user_id=transaction.user_id,
                 company_name=selected_item["company_name"],
                 plan_name=selected_item["plan_name"],
@@ -198,12 +275,30 @@ class PaymentController:
             )
 
     async def get_payment_status(self, payment_reference: str) -> PaymentStatusResponse:
-        """Fetch provider-side payment status details."""
+        """Fetch provider-side payment status details.
+
+        Args:
+            payment_reference: Business payment reference to inspect.
+
+        Returns:
+            PaymentStatusResponse: Current provider payment status details.
+
+        Raises:
+            HTTPException: If the payment reference is invalid or the provider
+                payment status cannot be fetched.
+        """
 
         try:
             logging.info("Executing PaymentController.get_payment_status function")
+            normalized_payment_reference = payment_reference.strip()
+            if not normalized_payment_reference:
+                logging.warning("Empty payment_reference provided for status lookup")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Payment reference is required.",
+                )
             provider_response = await self.provider_service.get_payment_status(
-                payment_reference
+                normalized_payment_reference
             )
             return PaymentStatusResponse(
                 transaction_id=provider_response["transaction_id"],

@@ -25,11 +25,33 @@ class QuoteController:
         self.provider_service = ProviderService()
 
     async def get_quotes(self, transaction_id: str) -> QuoteResponse:
-        """Fetch provider-generated quotes for one transaction."""
+        """Fetch provider-generated quotes for one transaction.
+
+        Args:
+            transaction_id: Business transaction identifier for the quote journey.
+
+        Returns:
+            QuoteResponse: Provider-generated quotes mapped into the main-backend
+                response schema.
+
+        Raises:
+            HTTPException: If the transaction identifier is invalid or the
+                provider quotes cannot be fetched.
+        """
 
         try:
             logging.info("Executing QuoteController.get_quotes function")
-            provider_response = await self.provider_service.get_quotes(transaction_id)
+            normalized_transaction_id = transaction_id.strip()
+            if not normalized_transaction_id:
+                logging.warning("Empty transaction_id provided for quote retrieval")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Transaction id is required.",
+                )
+
+            provider_response = await self.provider_service.get_quotes(
+                normalized_transaction_id
+            )
             return self._build_quote_response(provider_response)
         except HTTPException as httperror:
             logging.error("Error in QuoteController.get_quotes function: %s", httperror)
