@@ -30,13 +30,39 @@ class PlanController:
         self.plan_crud = InsurancePlanCrud()
 
     async def create_plan(self, payload: PlanCreateRequest) -> PlanResponse:
-        """Create a new provider insurance plan."""
+        """Create a new provider insurance plan.
+
+        Args:
+            payload: Provider-plan creation payload.
+
+        Returns:
+            PlanResponse: Created provider insurance-plan response.
+
+        Raises:
+            HTTPException: If required values are invalid, the plan already
+                exists, or the plan cannot be created.
+        """
         try:
             logging.info("Executing PlanController.create_plan function")
-            existing_plan = await self.plan_crud.get_by_plan_code(payload.plan_code)
+            normalized_plan_code = payload.plan_code.strip()
+            normalized_company_name = payload.company_name.strip()
+            normalized_plan_name = payload.plan_name.strip()
+            if (
+                not normalized_plan_code
+                or not normalized_company_name
+                or not normalized_plan_name
+            ):
+                logging.warning("Plan creation received empty required values")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Company name, plan name, and plan code are required.",
+                )
+
+            existing_plan = await self.plan_crud.get_by_plan_code(normalized_plan_code)
             if existing_plan is not None:
                 logging.warning(
-                    "Plan code %s already exists", payload.plan_code
+                    "Plan code %s already exists",
+                    normalized_plan_code,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -54,10 +80,10 @@ class PlanController:
             plan = await self.plan_crud.create(
                 InsuranceModel.model_validate(
                     {
-                        "company_name": payload.company_name,
+                        "company_name": normalized_company_name,
                         "logo_url": payload.logo_url,
-                        "plan_name": payload.plan_name,
-                        "plan_code": payload.plan_code,
+                        "plan_name": normalized_plan_name,
+                        "plan_code": normalized_plan_code,
                         "insurance_type": InsuranceType(payload.insurance_type),
                         "coverage_amount": payload.coverage_amount,
                         "base_premium": payload.base_premium,
@@ -68,7 +94,7 @@ class PlanController:
                     }
                 )
             )
-            logging.info("Plan created successfully with code %s", payload.plan_code)
+            logging.info("Plan created successfully with code %s", normalized_plan_code)
             return self._build_plan_response(plan)
         except HTTPException as httperror:
             logging.error(
@@ -83,18 +109,44 @@ class PlanController:
             )
 
     async def update_plan(self, plan_code: str, payload: PlanUpdateRequest) -> PlanResponse:
-        """Apply partial updates to one provider plan."""
+        """Apply partial updates to one provider plan.
+
+        Args:
+            plan_code: Unique provider plan code to update.
+            payload: Partial provider-plan updates.
+
+        Returns:
+            PlanResponse: Updated provider insurance-plan response.
+
+        Raises:
+            HTTPException: If the plan code is invalid or the plan cannot be
+                updated.
+        """
         try:
             logging.info("Executing PlanController.update_plan function")
-            plan = await self.plan_crud.get_by_plan_code(plan_code)
+            normalized_plan_code = plan_code.strip()
+            if not normalized_plan_code:
+                logging.warning("Empty plan_code provided for plan update")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Plan code is required.",
+                )
+
+            plan = await self.plan_crud.get_by_plan_code(normalized_plan_code)
             if plan is None:
-                logging.warning("Plan not found for code %s", plan_code)
+                logging.warning("Plan not found for code %s", normalized_plan_code)
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Plan not found.",
                 )
 
             updates = payload.model_dump(exclude_unset=True)
+            if "company_name" in updates and updates["company_name"] is not None:
+                updates["company_name"] = updates["company_name"].strip()
+            if "plan_name" in updates and updates["plan_name"] is not None:
+                updates["plan_name"] = updates["plan_name"].strip()
+            if "plan_code" in updates and updates["plan_code"] is not None:
+                updates["plan_code"] = updates["plan_code"].strip()
             if "insurance_type" in updates and updates["insurance_type"] is not None:
                 updates["insurance_type"] = InsuranceType(updates["insurance_type"])
             if (
@@ -117,7 +169,7 @@ class PlanController:
                 ]
 
             updated_plan = await self.plan_crud.update(plan, updates)
-            logging.info("Plan updated successfully for code %s", plan_code)
+            logging.info("Plan updated successfully for code %s", normalized_plan_code)
             return self._build_plan_response(updated_plan)
         except HTTPException as httperror:
             logging.error(
@@ -132,12 +184,31 @@ class PlanController:
             )
 
     async def get_plan(self, plan_code: str) -> PlanResponse:
-        """Return one provider plan by plan code."""
+        """Return one provider plan by plan code.
+
+        Args:
+            plan_code: Unique provider plan code to fetch.
+
+        Returns:
+            PlanResponse: Serialized provider plan response.
+
+        Raises:
+            HTTPException: If the plan code is invalid or the plan cannot be
+                found.
+        """
         try:
             logging.info("Executing PlanController.get_plan function")
-            plan = await self.plan_crud.get_by_plan_code(plan_code)
+            normalized_plan_code = plan_code.strip()
+            if not normalized_plan_code:
+                logging.warning("Empty plan_code provided for plan lookup")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Plan code is required.",
+                )
+
+            plan = await self.plan_crud.get_by_plan_code(normalized_plan_code)
             if plan is None:
-                logging.warning("Plan not found for code %s", plan_code)
+                logging.warning("Plan not found for code %s", normalized_plan_code)
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Plan not found.",
@@ -156,7 +227,14 @@ class PlanController:
             )
 
     async def list_plans(self) -> PlanListResponse:
-        """Return all provider plans."""
+        """Return all provider plans.
+
+        Returns:
+            PlanListResponse: Ordered list of provider insurance plans.
+
+        Raises:
+            HTTPException: If plan listing fails.
+        """
         try:
             logging.info("Executing PlanController.list_plans function")
             plans = await self.plan_crud.list_all()

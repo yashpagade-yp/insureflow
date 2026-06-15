@@ -36,6 +36,10 @@ class InsurancePlanCrud:
         """Return one insurance plan by ODMantic object id."""
         try:
             logging.info("Executing InsurancePlanCrud.get_by_id function")
+            if isinstance(object_id, str):
+                if len(object_id) != 24:
+                    return None
+                object_id = ObjectId(object_id)
             return await self.engine.find_one(InsuranceModel, InsuranceModel.id == object_id)
         except Exception as error:
             logging.error("Error in InsurancePlanCrud.get_by_id function: %s", error)

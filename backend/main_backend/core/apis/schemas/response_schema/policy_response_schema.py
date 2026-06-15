@@ -43,6 +43,7 @@ class PolicyResponse(BaseModel):
         policy_status: Current policy status.
         issued_at: Policy issuance timestamp.
         created_at: Policy creation timestamp.
+        updated_at: Policy last-update timestamp.
     """
 
     policy_number: str = Field(..., description="Business-facing policy number")
@@ -69,6 +70,7 @@ class PolicyResponse(BaseModel):
     policy_status: str = Field(..., description="Current policy status")
     issued_at: datetime = Field(..., description="Policy issuance timestamp")
     created_at: datetime = Field(..., description="Policy creation timestamp")
+    updated_at: datetime = Field(..., description="Policy last-update timestamp")
 
     model_config = ConfigDict(extra="forbid")
 
