@@ -46,18 +46,7 @@ async def get_transaction(
     transaction_id: str,
     token: Annotated[str, Depends(oauth2_scheme)],
 ) -> TransactionResponse:
-    """Fetch one transaction by business transaction id.
-
-    Args:
-        transaction_id: Transaction identifier to fetch.
-        token: JWT token provided in the Authorization header.
-
-    Returns:
-        Serialized transaction response.
-
-    Raises:
-        HTTPException: If token validation or lookup fails.
-    """
+    """Fetch one transaction by business transaction id (requires auth — returning customers only)."""
 
     try:
         logging.info("Calling GET /v1/transactions/%s endpoint", transaction_id)
@@ -91,18 +80,7 @@ async def list_user_transactions(
     user_id: str,
     token: Annotated[str, Depends(oauth2_scheme)],
 ) -> TransactionListResponse:
-    """Fetch all transactions for one user.
-
-    Args:
-        user_id: User identifier whose transactions are requested.
-        token: JWT token provided in the Authorization header.
-
-    Returns:
-        List of serialized transactions.
-
-    Raises:
-        HTTPException: If token validation or access control fails.
-    """
+    """Fetch all transactions for one user (requires auth — dashboard only)."""
 
     try:
         logging.info("Calling GET /v1/users/%s/transactions endpoint", user_id)
@@ -147,24 +125,15 @@ async def list_user_transactions(
 )
 async def select_plan(
     payload: QuoteSelectPlanRequest,
-    token: Annotated[str, Depends(oauth2_scheme)],
 ) -> TransactionResponse:
     """Save the selected plan on a transaction.
 
-    Args:
-        payload: Selected plan payload.
-        token: JWT token provided in the Authorization header.
-
-    Returns:
-        Updated transaction response.
-
-    Raises:
-        HTTPException: If token validation or update fails.
+    No authentication required — the transaction_id UUID is unguessable
+    and the customer has just come from the quote selection step.
     """
 
     try:
         logging.info("Calling PATCH /v1/transactions/select-plan endpoint")
-        _get_authenticated_user(token)
         return await TransactionController().select_plan(payload)
     except HTTPException as httperror:
         logging.error(
@@ -190,24 +159,14 @@ async def select_plan(
 )
 async def save_selected_add_ons(
     payload: QuoteSelectAddOnsRequest,
-    token: Annotated[str, Depends(oauth2_scheme)],
 ) -> TransactionResponse:
     """Save selected add-ons on a transaction.
 
-    Args:
-        payload: Selected add-ons payload.
-        token: JWT token provided in the Authorization header.
-
-    Returns:
-        Updated transaction response.
-
-    Raises:
-        HTTPException: If token validation or update fails.
+    No authentication required — secured by unguessable transaction_id UUID.
     """
 
     try:
         logging.info("Calling PATCH /v1/transactions/select-add-ons endpoint")
-        _get_authenticated_user(token)
         return await TransactionController().save_selected_add_ons(payload)
     except HTTPException as httperror:
         logging.error(

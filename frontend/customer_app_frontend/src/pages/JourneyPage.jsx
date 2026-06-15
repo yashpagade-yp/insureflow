@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { createJourney } from "../lib/api";
+import { storeJourneyDraft } from "../lib/storage";
 
 const initialFormState = {
   mobile_number: "",
@@ -54,10 +55,25 @@ function JourneyPage() {
         type: "success",
         message: `Journey created. Transaction ID: ${response.transaction_id}`,
       });
-      navigate("/customer/login", {
+      storeJourneyDraft({
+        transactionId: response.transaction_id,
+        userId: response.user_id,
+        mobileNumber: formState.mobile_number,
+        insuranceType: formState.insurance_type,
+        sumInsuredRequested: Number(formState.sum_insured_requested || 0),
+        policyTermYears: Number(formState.policy_term_years || 0),
+        proposerName: `${formState.proposer_first_name} ${formState.proposer_last_name}`.trim(),
+        city: formState.city,
+        state: formState.state,
+      });
+      navigate("/journey/quotes", {
         state: {
-          mobileNumber: formState.mobile_number,
           transactionId: response.transaction_id,
+          userId: response.user_id,
+          mobileNumber: formState.mobile_number,
+          insuranceType: formState.insurance_type,
+          sumInsuredRequested: Number(formState.sum_insured_requested),
+          proposerName: `${formState.proposer_first_name} ${formState.proposer_last_name}`.trim(),
         },
       });
     } catch (error) {
@@ -76,6 +92,25 @@ function JourneyPage() {
           Enter the basic applicant and coverage information. After this, the customer can resume with OTP and continue to quotes.
         </p>
       </header>
+
+      <section className="journey-overview-card">
+        <div className="journey-overview-copy">
+          <p className="eyebrow-text">Customer flow</p>
+          <h2>Form → Quotes → Add-ons → Payment → Policy</h2>
+          <p>
+            Fill the health insurance form once, compare plans matched by the
+            provider network, optionally add riders, verify payment by OTP, and
+            receive the issued policy at the end of the journey.
+          </p>
+        </div>
+        <div className="journey-overview-steps">
+          <span>1. Create journey</span>
+          <span>2. Review quotes</span>
+          <span>3. Add add-ons</span>
+          <span>4. Verify payment</span>
+          <span>5. Download policy</span>
+        </div>
+      </section>
 
       <section className="section-card">
         <form className="form-grid" onSubmit={handleSubmit}>

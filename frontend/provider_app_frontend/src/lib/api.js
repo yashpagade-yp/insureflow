@@ -62,12 +62,28 @@ export function createCompany(payload) {
   return unwrapRequest(providerApi.post("/v1/companies", payload));
 }
 
+export function getCompany(companyId) {
+  return unwrapRequest(providerApi.get(`/v1/companies/${companyId}`));
+}
+
+export function updateCompany(companyId, payload) {
+  return unwrapRequest(providerApi.patch(`/v1/companies/${companyId}`, payload));
+}
+
 export function listPlans() {
   return unwrapRequest(providerApi.get("/v1/plans"));
 }
 
 export function createPlan(payload) {
   return unwrapRequest(providerApi.post("/v1/plans", payload));
+}
+
+export function getPlan(planCode) {
+  return unwrapRequest(providerApi.get(`/v1/plans/${planCode}`));
+}
+
+export function updatePlan(planCode, payload) {
+  return unwrapRequest(providerApi.patch(`/v1/plans/${planCode}`, payload));
 }
 
 export default providerApi;

@@ -2,32 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from fastapi import APIRouter, HTTPException, status
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-
-from commons.auth import decodeJWT
 from commons.logger import logger
 from core.controllers.quote_controller import QuoteController
 from core.apis.schemas.response_schema.quote_response_schema import QuoteResponse
 
 logging = logger(__name__)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/users/login-otp/verify")
 quote_router = APIRouter(tags=["quotes"])
-
-
-def _get_authenticated_user(token: str) -> dict:
-    """Validate a JWT token and return its decoded payload."""
-
-    authenticated_user_details = decodeJWT(token=token)
-    if not authenticated_user_details:
-        logging.warning("Invalid or expired token provided for main quote routes")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-    return authenticated_user_details
 
 
 @quote_router.get(
@@ -37,13 +19,15 @@ def _get_authenticated_user(token: str) -> dict:
 )
 async def get_quotes(
     transaction_id: str,
-    token: Annotated[str, Depends(oauth2_scheme)],
 ) -> QuoteResponse:
-    """Fetch provider-generated quotes for one transaction."""
+    """Fetch provider-generated quotes for one transaction.
+
+    No authentication required — the UUID transaction_id is unguessable
+    and acts as a secure, one-time access token for the customer journey.
+    """
 
     try:
         logging.info("Calling GET /v1/quotes/%s endpoint", transaction_id)
-        _get_authenticated_user(token)
         return await QuoteController().get_quotes(transaction_id)
     except HTTPException as httperror:
         logging.error(

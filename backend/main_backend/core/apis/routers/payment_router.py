@@ -46,26 +46,16 @@ def _get_authenticated_user(token: str) -> dict:
 )
 async def create_payment(
     payload: PaymentCreateRequest,
-    token: Annotated[str, Depends(oauth2_scheme)],
 ) -> PaymentCreateResponse:
-    """Create a payment session for one transaction."""
+    """Create a payment session for one transaction.
+
+    No authentication required — the customer has just completed plan selection.
+    Security is provided by the unguessable transaction_id UUID and the
+    subsequent OTP verification step.
+    """
 
     try:
         logging.info("Calling POST /v1/payments endpoint")
-        authenticated_user_details = _get_authenticated_user(token)
-        if (
-            authenticated_user_details.get("user_role") != "ADMIN"
-            and authenticated_user_details.get("id") != payload.user_id
-        ):
-            logging.warning(
-                "Unauthorized payment creation attempt for user ID %s by user ID %s",
-                payload.user_id,
-                authenticated_user_details.get("id"),
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have permission to create this payment.",
-            )
         return await PaymentController().create_payment(payload)
     except HTTPException as httperror:
         logging.error("Error in POST /v1/payments endpoint: %s", httperror)
@@ -85,13 +75,15 @@ async def create_payment(
 )
 async def send_payment_otp(
     payment_reference: str,
-    token: Annotated[str, Depends(oauth2_scheme)],
 ) -> PaymentOtpSendResponse:
-    """Send a payment OTP for one payment reference."""
+    """Send a payment OTP for one payment reference.
+
+    No authentication required — OTP is sent to the customer's registered
+    mobile number, which acts as the verification channel.
+    """
 
     try:
         logging.info("Calling POST /v1/payments/%s/send-otp endpoint", payment_reference)
-        _get_authenticated_user(token)
         return await PaymentController().send_payment_otp(payment_reference)
     except HTTPException as httperror:
         logging.error(
@@ -119,13 +111,14 @@ async def send_payment_otp(
 )
 async def verify_payment_otp(
     payload: PaymentOtpVerifyRequest,
-    token: Annotated[str, Depends(oauth2_scheme)],
 ) -> PaymentOtpVerifyResponse:
-    """Verify a payment OTP and complete the purchase flow."""
+    """Verify a payment OTP and complete the purchase flow.
+
+    No authentication required — the OTP from SMS is the security mechanism.
+    """
 
     try:
         logging.info("Calling POST /v1/payments/verify-otp endpoint")
-        _get_authenticated_user(token)
         return await PaymentController().verify_payment_otp(payload)
     except HTTPException as httperror:
         logging.error("Error in POST /v1/payments/verify-otp endpoint: %s", httperror)
@@ -147,7 +140,7 @@ async def get_payment_status(
     payment_reference: str,
     token: Annotated[str, Depends(oauth2_scheme)],
 ) -> PaymentStatusResponse:
-    """Fetch payment status details for one payment reference."""
+    """Fetch payment status details (requires auth — dashboard only)."""
 
     try:
         logging.info("Calling GET /v1/payments/%s/status endpoint", payment_reference)

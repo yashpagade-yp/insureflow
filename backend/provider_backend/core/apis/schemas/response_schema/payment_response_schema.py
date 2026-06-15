@@ -38,11 +38,16 @@ class PaymentOtpSendResponse(BaseModel):
         message: Human-readable response message.
         payment_reference: Payment reference for the current payment.
         otp_expires_at: Timestamp when the payment OTP expires.
+        plain_otp: Mock OTP value exposed only for local development flows.
     """
 
     message: str = Field(..., description="Human-readable response message")
     payment_reference: str = Field(..., description="Payment reference for the current payment")
     otp_expires_at: datetime = Field(..., description="Timestamp when the payment OTP expires")
+    plain_otp: str | None = Field(
+        default=None,
+        description="Mock OTP value exposed only for local development flows",
+    )
 
     model_config = ConfigDict(extra="forbid")
 

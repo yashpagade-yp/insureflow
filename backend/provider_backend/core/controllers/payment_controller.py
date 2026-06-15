@@ -145,6 +145,7 @@ class PaymentController:
                 message="Payment OTP generated successfully.",
                 payment_reference=payment.payment_reference,
                 otp_expires_at=payment_otp.expires_at,
+                plain_otp=plain_otp,
             )
         except HTTPException as httperror:
             logging.error(

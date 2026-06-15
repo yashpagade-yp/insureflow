@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 
 import EmptyState from "../components/EmptyState";
 import SectionCard from "../components/SectionCard";
@@ -8,182 +9,485 @@ import {
   getQuotes,
   selectAddOns,
   selectPlan,
-  sendPaymentOtp,
   verifyPaymentOtp,
+  sendPaymentOtp,
 } from "../lib/api";
+import {
+  getStoredJourneyDraft,
+  removeStoredJourneyDraft,
+  storeJourneyDraft,
+} from "../lib/storage";
+
+const FLOW_STEPS = ["View plans", "Add-ons", "Payment", "Complete"];
+
+function StepBar({ currentStep }) {
+  return (
+    <div className="journey-stepbar">
+      {FLOW_STEPS.map((label, index) => {
+        const isComplete = currentStep > index;
+        const isCurrent = currentStep === index;
+
+        return (
+          <div
+            key={label}
+            className={`journey-step ${
+              isComplete ? "journey-step-complete" : ""
+            } ${isCurrent ? "journey-step-current" : ""}`}
+          >
+            <span className="journey-step-index">
+              {isComplete ? "✓" : index + 1}
+            </span>
+            <span>{label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function QuotesPage() {
+  const location = useLocation();
   const { session } = useSession();
-  const [transactionId, setTransactionId] = useState("");
-  const [quoteData, setQuoteData] = useState(null);
-  const [selectedPlanId, setSelectedPlanId] = useState("");
-  const [selectedAddOns, setSelectedAddOns] = useState([]);
-  const [paymentState, setPaymentState] = useState({ amount: "", paymentReference: "", otp: "" });
-  const [status, setStatus] = useState({ type: "", message: "" });
 
-  const loadQuotes = async () => {
+  const storedDraft = getStoredJourneyDraft();
+  const routerState = location.state || {};
+
+  const initialJourney = {
+    transactionId: routerState.transactionId || storedDraft?.transactionId || "",
+    userId: routerState.userId || storedDraft?.userId || session?.userId || "",
+    mobileNumber:
+      routerState.mobileNumber ||
+      storedDraft?.mobileNumber ||
+      session?.mobileNumber ||
+      "",
+    proposerName: routerState.proposerName || storedDraft?.proposerName || "",
+    insuranceType:
+      routerState.insuranceType || storedDraft?.insuranceType || "health",
+    sumInsuredRequested:
+      routerState.sumInsuredRequested || storedDraft?.sumInsuredRequested || 0,
+  };
+
+  const [journeyMeta, setJourneyMeta] = useState(initialJourney);
+  const [quoteData, setQuoteData] = useState(null);
+  const [selectedPlanId, setSelectedPlanId] = useState(
+    storedDraft?.selectedPlanId || ""
+  );
+  const [selectedAddOns, setSelectedAddOns] = useState(
+    storedDraft?.selectedAddOns || []
+  );
+  const [paymentState, setPaymentState] = useState({
+    paymentReference: storedDraft?.paymentReference || "",
+    mobileNumber: initialJourney.mobileNumber,
+    otp: "",
+    plainOtp: storedDraft?.plainOtp || "",
+    otpExpiresAt: storedDraft?.otpExpiresAt || "",
+  });
+  const [status, setStatus] = useState({ type: "", message: "" });
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState(storedDraft?.currentStep || 0);
+  const [policyNumber, setPolicyNumber] = useState(
+    storedDraft?.policyNumber || ""
+  );
+
+  useEffect(() => {
+    storeJourneyDraft({
+      ...journeyMeta,
+      selectedPlanId,
+      selectedAddOns,
+      paymentReference: paymentState.paymentReference,
+      plainOtp: paymentState.plainOtp,
+      otpExpiresAt: paymentState.otpExpiresAt,
+      currentStep,
+      policyNumber,
+    });
+  }, [
+    currentStep,
+    journeyMeta,
+    paymentState.otpExpiresAt,
+    paymentState.paymentReference,
+    paymentState.plainOtp,
+    policyNumber,
+    selectedAddOns,
+    selectedPlanId,
+  ]);
+
+  useEffect(() => {
+    if (journeyMeta.transactionId && !quoteData) {
+      void loadQuotes(journeyMeta.transactionId);
+    }
+  }, [journeyMeta.transactionId, quoteData]);
+
+  const loadQuotes = async (transactionId) => {
+    if (!transactionId) {
+      setStatus({
+        type: "error",
+        message: "Create or resume a journey first to fetch quotes.",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    setStatus({ type: "", message: "" });
+
     try {
       const response = await getQuotes(transactionId);
       setQuoteData(response);
-      setSelectedPlanId(response.selected_plan_id || response.items?.[0]?.plan_id || "");
-      setStatus({ type: "success", message: "Quotes loaded successfully." });
+
+      const eligiblePlans =
+        response.items?.filter(
+          (item) =>
+            !journeyMeta.sumInsuredRequested ||
+            Number(item.coverage_amount) <= Number(journeyMeta.sumInsuredRequested)
+        ) ?? [];
+
+      const nextSelectedPlanId =
+        storedDraft?.selectedPlanId ||
+        response.selected_plan_id ||
+        eligiblePlans[0]?.plan_id ||
+        response.items?.[0]?.plan_id ||
+        "";
+
+      setSelectedPlanId(nextSelectedPlanId);
     } catch (error) {
       setStatus({ type: "error", message: error.message });
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  const selectedPlan = useMemo(
+    () => quoteData?.items?.find((item) => item.plan_id === selectedPlanId) ?? null,
+    [quoteData, selectedPlanId]
+  );
+
+  const basePremium = Number(selectedPlan?.base_premium || 0);
+  const addOnsTotal = selectedAddOns.reduce(
+    (sum, addOn) => sum + Number(addOn.price || 0),
+    0
+  );
+  const totalPremium = basePremium + addOnsTotal;
+
   const toggleAddOn = (addOn) => {
-    setSelectedAddOns((currentState) => {
-      const exists = currentState.some((item) => item.name === addOn.name);
+    setSelectedAddOns((currentValue) => {
+      const exists = currentValue.some((item) => item.name === addOn.name);
+
       if (exists) {
-        return currentState.filter((item) => item.name !== addOn.name);
+        return currentValue.filter((item) => item.name !== addOn.name);
       }
-      return [...currentState, { name: addOn.name, price: addOn.price }];
+
+      return [
+        ...currentValue,
+        { name: addOn.name, description: addOn.description, price: addOn.price },
+      ];
     });
   };
 
-  const savePlanSelection = async () => {
+  const handleConfirmPlan = async () => {
+    setIsLoading(true);
+    setStatus({ type: "", message: "" });
+
     try {
-      await selectPlan({ transaction_id: transactionId, selected_plan_id: selectedPlanId });
-      setStatus({ type: "success", message: "Plan selection saved." });
+      await selectPlan({
+        transaction_id: journeyMeta.transactionId,
+        selected_plan_id: selectedPlanId,
+      });
+      setCurrentStep(1);
     } catch (error) {
       setStatus({ type: "error", message: error.message });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const saveAddOnSelection = async () => {
+  const handleSaveAddOns = async () => {
+    setIsLoading(true);
+    setStatus({ type: "", message: "" });
+
     try {
       await selectAddOns({
-        transaction_id: transactionId,
+        transaction_id: journeyMeta.transactionId,
         selected_plan_id: selectedPlanId,
         selected_add_ons: selectedAddOns,
       });
-      setStatus({ type: "success", message: "Add-ons saved." });
-    } catch (error) {
-      setStatus({ type: "error", message: error.message });
-    }
-  };
-
-  const createCustomerPayment = async () => {
-    try {
-      const response = await createPayment({
-        transaction_id: transactionId,
-        user_id: session.userId,
-        amount: Number(paymentState.amount),
+      setCurrentStep(2);
+      setStatus({
+        type: "success",
+        message: "Add-ons saved. Continue to payment.",
       });
-
-      setPaymentState((currentState) => ({
-        ...currentState,
-        paymentReference: response.payment_reference,
-      }));
-      setStatus({ type: "success", message: "Payment record created." });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const sendOtpForPayment = async () => {
+  const handleSendPaymentOtp = async () => {
+    if (!paymentState.mobileNumber) {
+      setStatus({
+        type: "error",
+        message: "Enter the mobile number that should receive the payment OTP.",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    setStatus({ type: "", message: "" });
+
     try {
-      await sendPaymentOtp(paymentState.paymentReference);
-      setStatus({ type: "success", message: "Payment OTP sent." });
+      let paymentReference = paymentState.paymentReference;
+
+      if (!paymentReference) {
+        const createPaymentResponse = await createPayment({
+          transaction_id: journeyMeta.transactionId,
+          user_id: journeyMeta.userId || session?.userId,
+          amount: totalPremium,
+        });
+        paymentReference = createPaymentResponse.payment_reference;
+      }
+
+      const otpResponse = await sendPaymentOtp(paymentReference);
+
+      setPaymentState((currentValue) => ({
+        ...currentValue,
+        paymentReference,
+        plainOtp: otpResponse.plain_otp || "",
+        otpExpiresAt: otpResponse.otp_expires_at || "",
+      }));
+
+      setStatus({
+        type: "success",
+        message: otpResponse.plain_otp
+          ? "Payment OTP sent. In dev mode, the OTP is shown below as well."
+          : "Payment OTP sent to the registered mobile number.",
+      });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const verifyOtpForPayment = async () => {
+  const handleVerifyPaymentOtp = async () => {
+    if (!paymentState.paymentReference || !paymentState.otp) {
+      setStatus({
+        type: "error",
+        message: "Send the OTP first, then enter it to complete payment.",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    setStatus({ type: "", message: "" });
+
     try {
       const response = await verifyPaymentOtp({
-        transaction_id: transactionId,
+        transaction_id: journeyMeta.transactionId,
         payment_reference: paymentState.paymentReference,
         otp: paymentState.otp,
       });
+
+      setPolicyNumber(response.policy_number || "");
+      setCurrentStep(3);
       setStatus({
         type: "success",
-        message: response.policy_number
-          ? `Payment verified. Policy issued: ${response.policy_number}`
-          : response.message,
+        message:
+          "Payment verified and policy issued successfully. You can now access your policy details.",
       });
+      removeStoredJourneyDraft();
     } catch (error) {
       setStatus({ type: "error", message: error.message });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const selectedPlan =
-    quoteData?.items?.find((item) => item.plan_id === selectedPlanId) || null;
-
   return (
-    <div className="page-stack">
+    <div className="page-stack customer-flow-page">
       <header className="page-header page-header-tight">
-        <p className="eyebrow-text">Quotes and payment</p>
-        <h2>Move from quote selection to payment verification.</h2>
+        <p className="eyebrow-text">Customer purchase flow</p>
+        <h2>Move from quote selection to policy issuance in one guided journey.</h2>
+        <p className="page-copy">
+          Review quotes, choose one plan, optionally add riders, verify payment
+          by OTP, and complete the policy purchase without leaving the flow.
+        </p>
       </header>
 
+      <section className="journey-overview-card journey-overview-card-compact">
+        <div className="journey-overview-copy">
+          <p className="eyebrow-text">Current journey</p>
+          <h3>
+            {journeyMeta.proposerName || "Customer journey"}{" "}
+            {journeyMeta.mobileNumber ? `• ${journeyMeta.mobileNumber}` : ""}
+          </h3>
+          <p>
+            Transaction ID:{" "}
+            <strong>{journeyMeta.transactionId || "Create or resume a journey"}</strong>
+          </p>
+        </div>
+        <div className="journey-overview-steps">
+          <span>{journeyMeta.insuranceType} insurance</span>
+          <span>
+            Sum insured: ₹
+            {Number(journeyMeta.sumInsuredRequested || 0).toLocaleString()}
+          </span>
+        </div>
+      </section>
+
       {status.message ? (
-        <div className={status.type === "error" ? "alert-box alert-error" : "alert-box alert-success"}>
+        <div
+          className={
+            status.type === "error"
+              ? "alert-box alert-error"
+              : "alert-box alert-success"
+          }
+        >
           {status.message}
         </div>
       ) : null}
 
-      <SectionCard title="Load quotes" subtitle="Enter a transaction ID to fetch provider quotes.">
-        <div className="inline-form">
-          <input
-            className="field-input"
-            value={transactionId}
-            onChange={(event) => setTransactionId(event.target.value)}
-            placeholder="Enter transaction ID"
-          />
-          <button type="button" className="primary-button" onClick={loadQuotes}>
-            Fetch quotes
-          </button>
-        </div>
-      </SectionCard>
+      {quoteData ? <StepBar currentStep={currentStep} /> : null}
 
       {!quoteData ? (
-        <EmptyState
-          title="No quotes loaded yet"
-          description="Fetch a transaction first to view plans, add-ons, and payment steps."
-        />
-      ) : (
-        <>
-          <SectionCard title="Available plans" subtitle="Select one plan for this transaction.">
-            <div className="card-grid">
-              {quoteData.items.map((item) => (
+        <SectionCard
+          title="Load provider quotes"
+          subtitle="Continue from a created journey or use a saved transaction to fetch plans."
+        >
+          <div className="stacked-fields">
+            <label className="field-label">
+              <span>Transaction ID</span>
+              <input
+                className="field-input"
+                value={journeyMeta.transactionId}
+                onChange={(event) =>
+                  setJourneyMeta((currentValue) => ({
+                    ...currentValue,
+                    transactionId: event.target.value,
+                  }))
+                }
+                placeholder="Enter transaction ID"
+              />
+            </label>
+
+            <div className="button-row customer-flow-actions">
+              <Link to="/journey/new" className="ghost-button">
+                Start a new journey
+              </Link>
+              <Link
+                to="/customer/login"
+                className="ghost-button"
+                state={{ mobileNumber: journeyMeta.mobileNumber }}
+              >
+                Resume with OTP
+              </Link>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => loadQuotes(journeyMeta.transactionId)}
+                disabled={isLoading}
+              >
+                {isLoading ? "Loading..." : "Fetch quotes"}
+              </button>
+            </div>
+          </div>
+        </SectionCard>
+      ) : null}
+
+      {quoteData && currentStep === 0 ? (
+        <SectionCard
+          title="Choose your plan"
+          subtitle="Compare plans returned by the provider network and confirm the best fit."
+        >
+          {journeyMeta.sumInsuredRequested ? (
+            <div className="coverage-filter-note">
+              Plans above your requested sum insured are shown for visibility,
+              but only eligible plans are selectable.
+            </div>
+          ) : null}
+
+          <div className="customer-plan-grid">
+            {quoteData.items.map((item) => {
+              const isEligible =
+                !journeyMeta.sumInsuredRequested ||
+                Number(item.coverage_amount) <=
+                  Number(journeyMeta.sumInsuredRequested);
+              const isSelected = item.plan_id === selectedPlanId;
+
+              return (
                 <article
                   key={item.plan_id}
-                  className={item.plan_id === selectedPlanId ? "mini-card mini-card-selected" : "mini-card"}
+                  className={`customer-plan-card ${
+                    isSelected ? "customer-plan-card-selected" : ""
+                  } ${!isEligible ? "quotes-plan-disabled" : ""}`}
+                  onClick={() => isEligible && setSelectedPlanId(item.plan_id)}
                 >
-                  <h4>{item.plan_name}</h4>
-                  <p>{item.company_name}</p>
-                  <p>Coverage: Rs. {item.coverage_amount}</p>
-                  <p>Total premium: Rs. {item.total_premium}</p>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setSelectedPlanId(item.plan_id)}
-                  >
-                    Choose this plan
-                  </button>
-                </article>
-              ))}
-            </div>
-            <button type="button" className="primary-button" onClick={savePlanSelection}>
-              Save selected plan
-            </button>
-          </SectionCard>
+                  <div className="customer-plan-header">
+                    <div>
+                      <h3>{item.plan_name}</h3>
+                      <p>{item.company_name}</p>
+                    </div>
+                    <span className="info-chip">{item.quote_status}</span>
+                  </div>
 
-          <SectionCard title="Add-ons" subtitle="Select add-ons for the chosen plan if available.">
-            {!selectedPlan || selectedPlan.available_add_ons.length === 0 ? (
-              <EmptyState
-                title="No add-ons available"
-                description="The chosen plan currently has no optional add-ons."
-              />
-            ) : (
-              <div className="stacked-fields">
-                {selectedPlan.available_add_ons.map((addOn) => {
-                  const checked = selectedAddOns.some((item) => item.name === addOn.name);
-                  return (
-                    <label key={addOn.name} className="addon-row">
+                  <div className="customer-plan-metrics">
+                    <div>
+                      <span>Coverage</span>
+                      <strong>₹{Number(item.coverage_amount).toLocaleString()}</strong>
+                    </div>
+                    <div>
+                      <span>Base premium</span>
+                      <strong>₹{Number(item.base_premium).toLocaleString()}</strong>
+                    </div>
+                    <div>
+                      <span>Duration</span>
+                      <strong>{item.duration_years} years</strong>
+                    </div>
+                  </div>
+
+                  {item.benefits.length ? (
+                    <div className="chip-list">
+                      {item.benefits.slice(0, 4).map((benefit) => (
+                        <span key={benefit} className="info-chip">
+                          {benefit}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="button-row customer-flow-actions">
+            <Link to="/journey/new" className="ghost-button">
+              ← Back to form
+            </Link>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleConfirmPlan}
+              disabled={!selectedPlanId || isLoading}
+            >
+              {isLoading ? "Saving..." : "Confirm selected plan"}
+            </button>
+          </div>
+        </SectionCard>
+      ) : null}
+
+      {quoteData && currentStep === 1 ? (
+        <SectionCard
+          title="Select optional add-ons"
+          subtitle="Choose only the riders you actually want to add to the selected plan."
+        >
+          {selectedPlan?.available_add_ons?.length ? (
+            <div className="stacked-fields">
+              {selectedPlan.available_add_ons.map((addOn) => {
+                const checked = selectedAddOns.some(
+                  (item) => item.name === addOn.name
+                );
+
+                return (
+                  <label key={addOn.name} className="addon-card">
+                    <div className="addon-card-main">
                       <input
                         type="checkbox"
                         checked={checked}
@@ -191,83 +495,198 @@ function QuotesPage() {
                       />
                       <div>
                         <strong>{addOn.name}</strong>
-                        <p>{addOn.description}</p>
+                        <p className="muted-copy">{addOn.description}</p>
                       </div>
-                      <span>Rs. {addOn.price}</span>
-                    </label>
-                  );
-                })}
-                <button type="button" className="primary-button" onClick={saveAddOnSelection}>
-                  Save selected add-ons
-                </button>
+                    </div>
+                    <strong>₹{Number(addOn.price).toLocaleString()}</strong>
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              title="No add-ons on this plan"
+              description="This plan can be purchased directly without any optional add-ons."
+            />
+          )}
+
+          <div className="button-row customer-flow-actions">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => setCurrentStep(0)}
+            >
+              ← Back to plan selection
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleSaveAddOns}
+              disabled={isLoading}
+            >
+              {isLoading ? "Saving..." : "Continue to payment"}
+            </button>
+          </div>
+        </SectionCard>
+      ) : null}
+
+      {quoteData && currentStep === 2 ? (
+        <SectionCard
+          title="Payment verification"
+          subtitle="We create the payment automatically and then verify it using OTP."
+        >
+          <div className="payment-layout">
+            <div className="payment-summary-card">
+              <p className="eyebrow-text">Insurance summary</p>
+              <h3>{selectedPlan?.plan_name || "Selected plan"}</h3>
+              <p className="muted-copy">
+                {selectedPlan?.company_name || "Provider company"}
+              </p>
+
+              <div className="payment-line-item">
+                <span>Base premium</span>
+                <strong>₹{basePremium.toLocaleString()}</strong>
               </div>
-            )}
-          </SectionCard>
 
-          <SectionCard title="Payment flow" subtitle="Create payment, send payment OTP, and verify it.">
-            <div className="form-grid">
-              <label className="field-label">
-                <span>Amount</span>
-                <input
-                  className="field-input"
-                  type="number"
-                  min="0"
-                  value={paymentState.amount}
-                  onChange={(event) =>
-                    setPaymentState((currentState) => ({
-                      ...currentState,
-                      amount: event.target.value,
-                    }))
-                  }
-                  placeholder="Enter payable amount"
-                />
-              </label>
+              {selectedAddOns.map((addOn) => (
+                <div key={addOn.name} className="payment-line-item">
+                  <span>+ {addOn.name}</span>
+                  <strong>₹{Number(addOn.price).toLocaleString()}</strong>
+                </div>
+              ))}
 
-              <label className="field-label">
-                <span>Payment reference</span>
-                <input
-                  className="field-input"
-                  value={paymentState.paymentReference}
-                  onChange={(event) =>
-                    setPaymentState((currentState) => ({
-                      ...currentState,
-                      paymentReference: event.target.value,
-                    }))
-                  }
-                  placeholder="Generated payment reference"
-                />
-              </label>
-
-              <label className="field-label">
-                <span>Payment OTP</span>
-                <input
-                  className="field-input"
-                  value={paymentState.otp}
-                  onChange={(event) =>
-                    setPaymentState((currentState) => ({
-                      ...currentState,
-                      otp: event.target.value,
-                    }))
-                  }
-                  placeholder="Enter payment OTP"
-                />
-              </label>
+              <div className="payment-total-row">
+                <span>Total payable</span>
+                <strong>₹{totalPremium.toLocaleString()}</strong>
+              </div>
             </div>
 
-            <div className="button-row">
-              <button type="button" className="primary-button" onClick={createCustomerPayment}>
-                Create payment
-              </button>
-              <button type="button" className="secondary-button" onClick={sendOtpForPayment}>
-                Send payment OTP
-              </button>
-              <button type="button" className="secondary-button" onClick={verifyOtpForPayment}>
-                Verify payment OTP
-              </button>
+            <div className="payment-action-card">
+              <label className="field-label">
+                <span>Mobile number for payment OTP</span>
+                <input
+                  className="field-input"
+                  value={paymentState.mobileNumber}
+                  onChange={(event) =>
+                    setPaymentState((currentValue) => ({
+                      ...currentValue,
+                      mobileNumber: event.target.value,
+                    }))
+                  }
+                  placeholder="Enter mobile number"
+                />
+              </label>
+
+              {paymentState.paymentReference ? (
+                <div className="payment-reference-banner">
+                  <strong>Payment reference</strong>
+                  <span>{paymentState.paymentReference}</span>
+                </div>
+              ) : null}
+
+              {paymentState.plainOtp ? (
+                <div className="payment-otp-preview">
+                  <p className="eyebrow-text">Dev OTP preview</p>
+                  <h3>{paymentState.plainOtp}</h3>
+                  <p className="muted-copy">
+                    Use this OTP directly in dev mode instead of checking SMS.
+                  </p>
+                </div>
+              ) : null}
+
+              {paymentState.paymentReference ? (
+                <label className="field-label">
+                  <span>Enter payment OTP</span>
+                  <input
+                    className="field-input field-input-large"
+                    value={paymentState.otp}
+                    onChange={(event) =>
+                      setPaymentState((currentValue) => ({
+                        ...currentValue,
+                        otp: event.target.value,
+                      }))
+                    }
+                    placeholder="Enter OTP"
+                  />
+                </label>
+              ) : null}
+
+              <div className="button-row customer-flow-actions">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setCurrentStep(1)}
+                >
+                  ← Back to add-ons
+                </button>
+
+                {!paymentState.paymentReference ? (
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={handleSendPaymentOtp}
+                    disabled={isLoading}
+                  >
+                    {isLoading
+                      ? "Sending OTP..."
+                      : `Send OTP for ₹${totalPremium.toLocaleString()}`}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={handleSendPaymentOtp}
+                      disabled={isLoading}
+                    >
+                      Resend OTP
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={handleVerifyPaymentOtp}
+                      disabled={!paymentState.otp || isLoading}
+                    >
+                      {isLoading ? "Verifying..." : "Verify OTP"}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-          </SectionCard>
-        </>
-      )}
+          </div>
+        </SectionCard>
+      ) : null}
+
+      {quoteData && currentStep === 3 ? (
+        <SectionCard
+          title="Policy issued successfully"
+          subtitle="The customer journey is complete and the policy record has been created."
+        >
+          <div className="completion-card">
+            <div>
+              <p className="eyebrow-text">Completed</p>
+              <h3>Policy number: {policyNumber}</h3>
+              <p className="muted-copy">
+                Transaction {journeyMeta.transactionId} has moved from quote
+                selection to policy issuance successfully.
+              </p>
+            </div>
+
+            <div className="button-row customer-flow-actions">
+              <Link
+                to="/customer/login"
+                className="ghost-button"
+                state={{ mobileNumber: journeyMeta.mobileNumber }}
+              >
+                Resume later with OTP
+              </Link>
+              <Link to="/" className="primary-button">
+                Back to home
+              </Link>
+            </div>
+          </div>
+        </SectionCard>
+      ) : null}
     </div>
   );
 }

@@ -1,0 +1,10 @@
+# InsureFlow Bot — Dependencies
+# Install with: uv add "pipecat-ai[smallwebrtc,deepgram,groq,cartesia,silero]"
+# Or with pip:  pip install -r requirements.txt
+
+pipecat-ai[smallwebrtc,deepgram,groq,cartesia,silero]
+fastapi
+uvicorn[standard]
+httpx
+python-dotenv
+loguru
