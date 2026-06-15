@@ -19,6 +19,8 @@ It covers:
 1. The customer opens the customer frontend.
 2. The customer starts the insurance journey directly.
 3. No prior registration is required before filling the form.
+4. Customer login is not the first step of the buying journey.
+5. Customer authentication is mock and used mainly for returning-user access.
 
 ### Form Submission And Journey Tracking
 
@@ -65,18 +67,38 @@ It covers:
 If the customer comes back later:
 
 1. The customer logs in with mobile number and OTP.
+2. This customer OTP flow is mock.
 2. The customer can view the latest incomplete journey.
 3. The customer can check transaction status.
 4. The customer can see the selected plan.
 5. The customer can check payment status.
 6. The customer can view the issued policy.
 7. The customer can access or download the policy PDF.
+8. If the customer faces an issue, the customer can raise a support ticket.
+
+### Customer Issue Or Ticket Flow
+
+Examples of customer issues include:
+
+1. payment is completed
+2. but the transaction status does not change to purchased
+3. or the policy PDF is not generated
+4. or another post-purchase issue occurs
+
+In such cases:
+
+1. the customer raises an issue or ticket
+2. a ticket record is created in the customer-side system
+3. the ticket becomes visible to the customer-app admin
+4. the admin investigates the issue
+5. the admin resolves the issue and closes the ticket
 
 ### Customer Flow Summary
 
 The customer fills the form first, gets quotes, selects a plan, optionally
 adds add-ons, completes payment, receives the policy, and later logs in using
-mobile OTP to track status and access the policy PDF.
+mock mobile OTP to track status, access the policy PDF, and raise a ticket if
+an issue occurs.
 
 ## 2. Admin Flow Inside The Customer App
 
@@ -84,6 +106,7 @@ mobile OTP to track status and access the policy PDF.
 
 1. The admin opens the customer-facing platform admin area.
 2. The admin logs in using email, password, and OTP.
+3. The admin OTP is real and is sent to the admin email.
 
 ### Admin Responsibilities
 
@@ -96,12 +119,14 @@ operations such as:
 4. completed journeys
 5. issued policies
 6. support tickets or issues
+7. customer tickets raised after failed or inconsistent policy purchase outcomes
+8. issue resolution and ticket closure
 
 ### Admin Flow Summary
 
 The customer-app admin is responsible for overseeing the customer journey side
-of the business, including users, transactions, forms, policies, and support
-operations.
+of the business, including users, transactions, forms, policies, support
+operations, ticket handling, and customer issue resolution.
 
 ## 3. Provider Backend Admin Flow
 
@@ -112,21 +137,25 @@ operations.
 3. The `provider_backend` sends an OTP to the admin email.
 4. The admin enters the OTP.
 5. After verification, the admin enters the provider admin dashboard.
+6. The admin OTP is real and is sent to the real admin email.
 
 ### Provider Admin Responsibilities
 
 Inside the provider admin dashboard, the admin can:
 
-1. register the mediator company `InsureFlow`
-2. generate and copy the one-time API key used for broker-to-provider
-   communication
-3. register provider insurance companies
-4. create insurance plans under provider companies
-5. add optional add-ons to plans
-6. view all registered companies
-7. view all published plans
-8. monitor provider-side quote and payment records if those views are exposed
-   in the dashboard
+1. create the buyer app first and register it in the provider system
+2. register the buyer app `InsureFlow` in the provider backend
+3. generate and copy the API key used for buyer-to-provider communication
+4. register provider insurance companies
+5. create insurance plans under provider companies
+6. add separate optional add-ons to plans where applicable
+7. manage plans where some companies or plans have add-ons and some do not
+8. view all registered companies
+9. view all published plans
+10. ensure proper API-key-based communication between the buyer app and
+    insurance provider companies
+11. monitor provider-side quote and payment records if those views are exposed
+    in the dashboard
 
 ### Provider-Side Role Rules
 
@@ -134,12 +163,13 @@ Inside the provider admin dashboard, the admin can:
 2. No customer logs in to the provider application.
 3. No separate provider employee role is currently used.
 4. This admin controls provider-side setup, onboarding, and management.
+5. Buyer-to-provider communication should happen through API keys.
 
 ### Provider Admin Flow Summary
 
 The provider admin logs in with email, password, and OTP, then manages
-mediator registration, provider companies, plans, add-ons, and provider-side
-insurance setup.
+buyer-app registration, API-key-based integration setup, provider companies,
+plans, add-ons, and provider-side insurance configuration.
 
 ## 4. Platform-Level Role View
 
@@ -153,6 +183,7 @@ for:
 3. selecting plans and add-ons
 4. completing payment
 5. accessing policy status and PDF later
+6. raising a ticket if an issue occurs
 
 ### Customer-App Admin Role
 
@@ -162,13 +193,14 @@ The customer-app admin role exists in the main platform and is used for:
 2. monitoring transactions and form completion
 3. viewing policies
 4. handling customer-side issues
+5. viewing and resolving customer tickets
 
 ### Provider Admin Role
 
 The provider admin role exists in the provider platform and is used for:
 
-1. insurer onboarding
-2. mediator registration
+1. buyer-app registration
+2. insurer onboarding
 3. API-key-based integration setup
 4. plan and add-on management
 
@@ -177,6 +209,7 @@ The provider admin role exists in the provider platform and is used for:
 InsureFlow has two main operational sides:
 
 - the customer side, where customers complete insurance journeys and customer
-  admins monitor them
-- the provider side, where the provider admin configures mediator records,
-  provider companies, plans, add-ons, and provider integration setup
+  admins monitor them and resolve tickets raised by customers
+- the provider side, where the provider admin configures the buyer app,
+  provider companies, plans, add-ons, and API-key-based provider integration
+  setup

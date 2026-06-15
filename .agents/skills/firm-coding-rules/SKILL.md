@@ -11,8 +11,8 @@ This skill defines the coding rules that must be followed while writing,
 reviewing, or refactoring backend code in this project.
 
 This file is the rulebook.
-The companion file `reference_firm_backend_patterns.md` is the concrete pattern
-reference derived from the firm's sample snippets.
+The companion skill `firm-backend-patterns` is the concrete pattern reference
+derived from the firm's sample snippets.
 
 Use this skill for:
 
@@ -97,8 +97,8 @@ Rules:
 - Controllers coordinate CRUD, auth helpers, utility helpers, and state changes.
 - Controllers must not contain raw database queries when CRUD exists.
 - Every public controller method must have a proper docstring.
-- Every controller method should use structured logging.
-- Every controller method should use `try/except` when it performs non-trivial flow.
+- Every public controller and service method should use structured logging.
+- Every controller and service method should use `try/except` when it performs non-trivial flow.
 - Re-raise known `HTTPException`.
 - Convert unexpected exceptions into explicit server errors.
 - Normalize inputs early when required, such as lowercasing emails.
@@ -126,7 +126,7 @@ Rules:
 
 ## Logging Rules
 
-Logging is mandatory in controllers and routers.
+Logging is mandatory in controllers, routers, and services.
 
 Rules:
 
@@ -136,26 +136,6 @@ Rules:
 - Use `error` for failures and unexpected exceptions.
 - Log before raising translated server errors.
 - Never log secrets, plain passwords, plain OTP values, or sensitive tokens.
-
-## Docstring Rules
-
-Docstrings are required for:
-
-- enums
-- models
-- embedded models
-- request schemas
-- response schemas
-- controller classes
-- non-trivial controller methods
-- routers and route handlers where practical
-
-Docstring expectations:
-
-- describe purpose clearly
-- include `Attributes` for models and schemas
-- include `Args`, `Returns`, and `Raises` for controller and route methods when useful
-- keep wording precise and helpful
 
 ## Exception Handling Rules
 
@@ -168,89 +148,12 @@ Rules:
 - Log the original failure before returning the translated error.
 - Use meaningful `detail` messages.
 
-## Authentication and Security Rules
-
-Rules:
-
-- Use helper functions for password hashing and verification.
-- Use helper functions for OTP generation, hashing, and verification.
-- Use helper functions for JWT generation and decoding.
-- Never store plain OTP values.
-- Never store plain passwords.
-- Exclude sensitive fields from API responses.
-- Enforce OTP expiry, retry interval, max attempts, and attempt window rules.
-- Clear OTP state after successful verification when required.
-- Roll back OTP state if a dependent step fails, such as notification delivery.
-
-## Input Normalization Rules
-
-Rules:
-
-- Normalize identity fields before lookup when applicable, such as lowercasing email.
-- Strip whitespace from credentials and identifiers when appropriate.
-- Validate missing resources early.
-- Validate unsupported flow branches early.
-
-## State Transition Rules
-
-Rules:
-
-- Status changes must be explicit in code.
-- Transaction, quote, payment, ticket, and policy states must be updated intentionally.
-- Avoid hidden state transitions.
-- Use meaningful enum-driven statuses.
-- Keep `last_login_at`, `last_active_at`, `updated_at`, and similar fields accurate when the business flow requires them.
-
-## Response Construction Rules
-
-Rules:
-
-- Use response schemas instead of ad hoc dictionaries at route boundaries.
-- Sanitize model output before returning it.
-- Exclude sensitive fields such as passwords and OTP state.
-- Convert database IDs to string form explicitly when exposing them through APIs.
-- Keep response structure stable and predictable.
-
-## Naming Rules
-
-Rules:
-
-- Use clear, intention-driven names.
-- Use entity-plus-purpose naming for schemas, such as `UserLoginOtpRequest`.
-- Use uppercase names for constants.
-- Prefix private helper methods with `_`.
-- Avoid vague abbreviations unless already standardized in the project.
-
-## Timestamp Rules
-
-Rules:
-
-- Use timezone-aware UTC timestamps.
-- Prefer `datetime.now(timezone.utc)`.
-- Use `default_factory` for timestamp defaults.
-- Update `updated_at` intentionally during persistence changes.
-
-## Forbidden Patterns
-
-Do not:
-
-- put raw DB logic in routers
-- put business logic in CRUD
-- store plain OTP values
-- store plain passwords
-- return full model dumps with sensitive fields
-- rely on undocumented magic numbers inside auth or business logic
-- allow extra unplanned fields in persisted models
-- create deep nesting when guard clauses are clearer
-- skip logging in important controller or router flows
-- skip docstrings for important classes and methods
-
 ## Review Checklist
 
 Before finishing code, check:
 
 - Is the correct layer doing the work?
-- Are models, schemas, routers, and controllers documented?
+- Are models, schemas, routers, controllers, and services documented?
 - Is logging present and correctly leveled?
 - Are auth and OTP operations helper-driven and secure?
 - Are timestamps UTC-aware?
@@ -258,12 +161,3 @@ Before finishing code, check:
 - Are sensitive fields excluded?
 - Are state transitions explicit?
 - Are exceptions handled in the standard pattern?
-
-## Skill Usage Rule
-
-Whenever backend code is created or reviewed for this project, apply this skill
-before finalizing the implementation.
-
-Also check `reference_firm_backend_patterns.md` so the final code matches the
-firm's real implementation style, especially for routers, controllers, CRUD,
-logging, and exception handling.
