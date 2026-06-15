@@ -86,6 +86,7 @@ class PaymentController:
                 message=provider_response["message"],
                 payment_reference=provider_response["payment_reference"],
                 otp_expires_at=provider_response["otp_expires_at"],
+                plain_otp=provider_response.get("plain_otp"),
             )
         except HTTPException as httperror:
             logging.error(

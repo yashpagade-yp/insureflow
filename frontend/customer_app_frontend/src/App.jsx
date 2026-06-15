@@ -13,12 +13,17 @@ import CustomerVerifyOtpPage from "./pages/CustomerVerifyOtpPage";
 import HomePage from "./pages/HomePage";
 import JourneyPage from "./pages/JourneyPage";
 import QuotesPage from "./pages/QuotesPage";
+import ChatBotPage from "./pages/ChatBotPage";
+import VoiceBotPage from "./pages/VoiceBotPage";
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/chat" element={<ChatBotPage />} />
+      <Route path="/voice" element={<VoiceBotPage />} />
       <Route path="/journey/new" element={<JourneyPage />} />
+      <Route path="/journey/quotes" element={<QuotesPage />} />
       <Route path="/customer/login" element={<CustomerLoginPage />} />
       <Route path="/customer/verify" element={<CustomerVerifyOtpPage />} />
       <Route path="/admin/login" element={<AdminLoginPage />} />

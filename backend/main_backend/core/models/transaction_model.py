@@ -15,6 +15,7 @@ from uuid import uuid4
 from odmantic import Field, Model
 from odmantic.config import ODMConfigDict
 from pydantic import BaseModel
+from pydantic import Field as PydanticField
 
 
 def generate_transaction_id() -> str:
@@ -55,8 +56,8 @@ class StatusHistoryEntry(BaseModel):
         timestamp: UTC timestamp when the status was recorded.
     """
 
-    status: TransactionStatus = Field(..., description="Recorded transaction status")
-    timestamp: datetime = Field(
+    status: TransactionStatus = PydanticField(..., description="Recorded transaction status")
+    timestamp: datetime = PydanticField(
         default_factory=lambda: datetime.now(timezone.utc),
         description="UTC timestamp for the status transition",
     )

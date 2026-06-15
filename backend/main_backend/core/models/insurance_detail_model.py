@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from odmantic import Field, Model
 from odmantic.config import ODMConfigDict
+from pydantic import field_validator
 
 
 class InsuranceType(str, Enum):
@@ -92,10 +93,19 @@ class InsuranceDetail(Model):
         default=None,
         description="Optional customer email captured in the form",
     )
-    proposer_dob: Optional[date] = Field(
+    proposer_dob: Optional[datetime] = Field(
         default=None,
-        description="Optional customer date of birth",
+        description="Optional customer date of birth (stored as UTC datetime)",
     )
+
+    @field_validator("proposer_dob", mode="before")
+    @classmethod
+    def coerce_dob_to_datetime(cls, v):
+        """Convert a bare date to midnight UTC datetime for MongoDB compatibility."""
+        if isinstance(v, date) and not isinstance(v, datetime):
+            return datetime(v.year, v.month, v.day, tzinfo=timezone.utc)
+        return v
+
     proposer_gender: Optional[str] = Field(
         default=None,
         description="Optional customer gender value",

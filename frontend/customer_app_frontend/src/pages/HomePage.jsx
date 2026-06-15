@@ -8,39 +8,56 @@ function HomePage() {
         <h1>Health insurance made understandable, trackable, and ready to buy.</h1>
         <p className="hero-copy">
           Customers can start their journey directly, get quotes, complete payment,
-          and access issued policies. Admins can monitor and issue policies from the same app.
+          and access issued policies. Or talk to our AI assistant instantly.
         </p>
 
         <div className="hero-actions">
-          <Link to="/journey/new" className="primary-button">
-            Start customer journey
+          <Link to="/chat" className="primary-button">
+            Chat with AI
           </Link>
-          <Link to="/customer/login" className="secondary-button">
-            Resume with OTP
+          <Link to="/voice" className="secondary-button">
+            Voice assistant
+          </Link>
+          <Link to="/journey/new" className="secondary-button">
+            Start manually
           </Link>
         </div>
       </section>
 
       <section className="choice-grid">
         <article className="choice-card">
-          <p className="eyebrow-text">Customer</p>
-          <h2>Apply, compare, pay</h2>
+          <p className="eyebrow-text">AI Chatbot</p>
+          <h2>Ask anything, get it done</h2>
           <p>
-            Fill the insurance form, fetch plans, select add-ons, verify payment OTP, and view policies.
+            Chat with InsureFlow AI — it will guide you through buying insurance,
+            compare plans, and complete your policy purchase end to end.
           </p>
-          <Link to="/journey/new" className="text-link">
-            Enter customer flow
+          <Link to="/chat" className="text-link">
+            Open chatbot →
           </Link>
         </article>
 
-        <article className="choice-card choice-card-admin">
-          <p className="eyebrow-text">Admin</p>
-          <h2>Handle operations</h2>
+        <article className="choice-card choice-card-voice">
+          <p className="eyebrow-text" style={{ color: "var(--success)" }}>AI Voice Bot</p>
+          <h2>Speak naturally</h2>
           <p>
-            Login using email, password, and OTP to inspect users, transactions, and policy issuance work.
+            Use your microphone to talk with InsureFlow AI. Ask about plans,
+            pricing, and complete your purchase hands-free.
           </p>
-          <Link to="/admin/login" className="text-link">
-            Enter admin flow
+          <Link to="/voice" className="text-link">
+            Open voice bot →
+          </Link>
+        </article>
+
+        <article className="choice-card">
+          <p className="eyebrow-text">Manual form</p>
+          <h2>Apply, compare, pay</h2>
+          <p>
+            Fill the insurance form yourself, fetch plans, select add-ons,
+            verify payment OTP, and view policies.
+          </p>
+          <Link to="/journey/new" className="text-link">
+            Start form →
           </Link>
         </article>
       </section>
