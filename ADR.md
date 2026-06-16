@@ -21,9 +21,17 @@ The backend side of InsureFlow is designed to support the full insurance lifecyc
 2. transaction creation
 3. quote generation
 4. plan and add-on selection
-5. payment processing
-6. policy issuance
-7. support ticket handling
+5. payment record creation
+6. mock payment gateway verification through payment OTP
+7. policy issuance and PDF generation
+8. support ticket handling
+
+The wider system now includes:
+
+- one customer frontend
+- one separate provider admin frontend
+- `main_backend`
+- `provider_backend`
 
 The platform uses two separate FastAPI backend services and a shared MongoDB Atlas cluster with separate databases.
 
@@ -64,9 +72,12 @@ Each backend has a specific responsibility boundary.
 - insurance details
 - policies
 - support tickets
+- customer-operations admin visibility for users, transactions, forms, and issues
 
 `provider_backend` handles:
 
+- provider-admin authentication
+- provider-admin users
 - registered companies
 - insurance provider company onboarding
 - mediator company onboarding such as InsureFlow
@@ -147,7 +158,33 @@ The provider backend supports secure communication for registered companies usin
 
 ---
 
-### 7. Transaction-Centric Journey Tracking
+### 7. Two Frontends With Separate Admin Work Areas
+
+**Decision**
+
+The project uses two frontends:
+
+- customer frontend
+- provider admin frontend
+
+**How It Works**
+
+- the customer frontend is used by customers for buying insurance
+- the customer frontend also contains an admin operations view for customer-side
+  monitoring such as users, transactions, forms, policies, and issues
+- the provider admin frontend is separate and is used only for provider-side
+  administration
+- the provider admin frontend is not accessible to customers
+
+**Why**
+
+- keeps customer journey and provider administration separate
+- reduces route and permission mixing
+- makes the system easier to scale and manage
+
+---
+
+### 8. Transaction-Centric Journey Tracking
 
 **Decision**
 
@@ -158,6 +195,7 @@ The insurance purchase flow is tracked through a dedicated transaction lifecycle
 - gives one central record for the full journey
 - makes progress tracking easier
 - supports resume flow and auditability
+- allows one customer to create multiple separate policy journeys under different transaction IDs
 
 **Expected Status Progression**
 
@@ -173,9 +211,15 @@ Optional failure state:
 
 - `PAYMENT_FAILED`
 
+**Important Journey Rule**
+
+- one customer can use the same mobile number for multiple policy purchases
+- each policy purchase must create a new `transaction_id`
+- incomplete transactions must remain resumable when the customer logs in again later
+
 ---
 
-### 8. OTP Embedded in User Model
+### 9. OTP Embedded in User Model
 
 **Decision**
 
@@ -189,7 +233,7 @@ OTP state is stored inside the user document instead of in a separate auth colle
 
 ---
 
-### 9. Add-Ons Embedded in Insurance Plans
+### 10. Add-Ons Embedded in Insurance Plans
 
 **Decision**
 
@@ -203,7 +247,7 @@ Add-ons are stored inside insurance plan documents rather than in a separate col
 
 ---
 
-### 10. Quote Stored as One Document per Transaction
+### 11. Quote Stored as One Document per Transaction
 
 **Decision**
 
@@ -217,21 +261,40 @@ All quote items for one transaction are grouped inside a single quote document.
 
 ---
 
-### 11. Mock Payment for Current Scope
+### 12. Mock Payment Gateway for Current Scope
 
 **Decision**
 
-Payment is currently handled as a mock flow.
+Payment is currently handled as a mock gateway flow instead of a real payment provider integration.
 
 **Why**
 
 - real payment gateway integration is outside current scope
 - helps complete the end-to-end backend flow first
 - keeps development focused on business logic
+- makes the checkout experience feel closer to a real buyer application
+
+**How It Works**
+
+- after plan and add-on selection, the transaction moves to `PAYMENT_PENDING`
+- a payment record is created in the provider backend and linked through `transaction_id` and `user_id`
+- the system generates or returns a planned payment URL
+- the customer opens a mock payment gateway page through that URL
+- a payment OTP is sent to the customer's mobile number
+- the customer enters the payment OTP on the mock gateway page
+- successful OTP verification marks the payment as successful
+- once payment succeeds, policy issuance and policy PDF generation continue
+
+**Important OTP Rule**
+
+- payment OTP and login OTP are separate flows
+- both may use the same mobile number
+- payment OTP confirms mock payment
+- login OTP authenticates the returning customer
 
 ---
 
-### 12. Backend Policy Generation
+### 13. Backend Policy Generation
 
 **Decision**
 
@@ -244,7 +307,28 @@ Policy creation and PDF generation are backend responsibilities.
 
 ---
 
-### 13. Strict Admin Access
+### 14. Resume-Friendly Customer Journey
+
+**Decision**
+
+Returning customers must be able to resume an incomplete insurance journey by logging in again with their mobile number.
+
+**Why**
+
+- customers may leave before completing plan selection, add-on selection, or payment
+- the platform should preserve progress instead of forcing a restart
+- resume behavior improves usability and fits transaction-based lifecycle tracking
+
+**How It Works**
+
+- customer login uses a login OTP sent to the registered mobile number
+- after authentication, the system fetches transactions linked to that user
+- the customer can continue from the latest incomplete transaction state
+- completed transactions remain available as history
+
+---
+
+### 15. Strict Admin Access
 
 **Decision**
 
@@ -254,7 +338,8 @@ Admin access is restricted and stronger than normal customer access.
 
 - no public admin sign-up
 - admin creation only by existing authenticated admins
-- admin login uses email, password, and OTP
+- customer-side admin login uses email, password, and OTP
+- provider-side admin login also uses email, password, and OTP
 - admin routes must enforce explicit admin authorization
 
 **Why**
@@ -262,6 +347,29 @@ Admin access is restricted and stronger than normal customer access.
 - protects sensitive management features
 - reduces unauthorized access risk
 - fits the responsibilities of admin operations
+
+---
+
+### 16. Provider-Admin Identity Model
+
+**Decision**
+
+The provider backend uses a dedicated provider-admin identity model for login
+and protected provider-side operations.
+
+**How It Works**
+
+- provider-admin users authenticate with email, password, and OTP
+- the same provider admin can manage companies, broker registration, plans,
+  quotes, payments, and provider-side operations
+- provider-company records and provider-admin login identities are stored
+  separately
+
+**Why**
+
+- company records are not login identities
+- provider admin authentication needs its own secure model
+- separates organization records from human operator accounts
 
 ---
 
@@ -427,10 +535,12 @@ Backend code should be easy to follow.
 InsureFlow backend development should follow these core principles:
 
 - two clearly separated backend services
+- two clearly separated frontend applications
 - strict service boundaries
 - secure API-key-based company communication
 - transaction-based lifecycle tracking
 - explicit admin security
+- separate provider-admin authentication
 - consistent route, controller, CRUD structure
 - readable and maintainable backend code
 

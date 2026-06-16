@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from odmantic import Field, Model
 from odmantic.config import ODMConfigDict
@@ -110,6 +110,8 @@ class User(Model):
         address: Optional embedded postal address.
         user_metadata: Optional dictionary for extensible user-related data.
         otp: Optional embedded OTP state for authentication flows.
+        is_active: Whether the user account is currently active.
+        last_login_at: Optional UTC timestamp for the user's latest login.
         created_at: UTC timestamp for when the user record was created.
         updated_at: UTC timestamp for the last user record update.
     """
@@ -135,13 +137,21 @@ class User(Model):
         default=None,
         description="Embedded postal address for the user",
     )
-    user_metadata: Optional[dict[str, Any]] = Field(
+    user_metadata: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Additional metadata about the user",
     )
     otp: Optional[UserOtp] = Field(
         default=None,
         description="Active OTP state for authentication flows",
+    )
+    is_active: bool = Field(
+        default=True,
+        description="Whether the user account is currently active",
+    )
+    last_login_at: Optional[datetime] = Field(
+        default=None,
+        description="Timestamp of the user's latest successful login",
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

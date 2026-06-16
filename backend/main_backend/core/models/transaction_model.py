@@ -9,11 +9,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import List, Optional
 from uuid import uuid4
 
 from odmantic import Field, Model
 from odmantic.config import ODMConfigDict
 from pydantic import BaseModel
+from pydantic import Field as PydanticField
 
 
 def generate_transaction_id() -> str:
@@ -54,8 +56,8 @@ class StatusHistoryEntry(BaseModel):
         timestamp: UTC timestamp when the status was recorded.
     """
 
-    status: TransactionStatus = Field(..., description="Recorded transaction status")
-    timestamp: datetime = Field(
+    status: TransactionStatus = PydanticField(..., description="Recorded transaction status")
+    timestamp: datetime = PydanticField(
         default_factory=lambda: datetime.now(timezone.utc),
         description="UTC timestamp for the status transition",
     )
@@ -74,6 +76,12 @@ class TransactionV1(Model):
         user_id: Identifier of the user who owns the transaction.
         current_status: Current lifecycle status of the transaction.
         status_history: Ordered history of status transition events.
+        last_active_at: UTC timestamp of the latest user or system activity on
+            the transaction.
+        selected_plan_id: Optional selected provider plan identifier for the
+            journey.
+        completed_at: UTC timestamp when the transaction finished
+            successfully.
         created_at: UTC timestamp when the transaction was created.
         updated_at: UTC timestamp for the latest transaction update.
     """
@@ -88,11 +96,23 @@ class TransactionV1(Model):
         default=TransactionStatus.FORM_SUBMITTED,
         description="Current lifecycle status of the transaction",
     )
-    status_history: list[StatusHistoryEntry] = Field(
+    status_history: List[StatusHistoryEntry] = Field(
         default_factory=lambda: [
             StatusHistoryEntry(status=TransactionStatus.FORM_SUBMITTED)
         ],
         description="Chronological history of transaction status transitions",
+    )
+    last_active_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Timestamp of the latest activity on the transaction",
+    )
+    selected_plan_id: Optional[str] = Field(
+        default=None,
+        description="Optional selected provider plan identifier",
+    )
+    completed_at: Optional[datetime] = Field(
+        default=None,
+        description="Timestamp when the transaction completed successfully",
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

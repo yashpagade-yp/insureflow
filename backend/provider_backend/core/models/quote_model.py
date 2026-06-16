@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import List, Optional
 
 from odmantic import Field, Model
 from odmantic.config import ODMConfigDict
@@ -41,6 +42,20 @@ class SelectedAddOn(BaseModel):
     price: float = Field(..., ge=0, description="Price of the selected add-on")
 
 
+class AvailableAddOn(BaseModel):
+    """Represents an add-on available for selection within a quote item.
+
+    Attributes:
+        name: Name of the available add-on.
+        description: Short explanation of the available add-on.
+        price: Price of the available add-on.
+    """
+
+    name: str = Field(..., description="Name of the available add-on")
+    description: str = Field(..., description="Description of the available add-on")
+    price: float = Field(..., ge=0, description="Price of the available add-on")
+
+
 class QuoteItem(BaseModel):
     """Represents one plan quote embedded inside the transaction quote document.
 
@@ -53,6 +68,7 @@ class QuoteItem(BaseModel):
         base_premium: Base premium before add-ons and tax.
         duration_years: Duration of the quoted plan in years.
         benefits: List of benefits included in the quoted plan.
+        available_add_ons: Embedded list of add-ons available for selection.
         selected_add_ons: Embedded list of selected add-ons.
         add_on_total: Total premium amount added by add-ons.
         tax_amount: Tax amount applied to the quote.
@@ -62,7 +78,7 @@ class QuoteItem(BaseModel):
 
     plan_id: str = Field(..., description="Identifier of the source insurance plan")
     company_name: str = Field(..., description="Name of the provider company")
-    logo_url: str | None = Field(
+    logo_url: Optional[str] = Field(
         default=None,
         description="Optional logo URL for the provider company",
     )
@@ -70,11 +86,15 @@ class QuoteItem(BaseModel):
     coverage_amount: float = Field(..., ge=0, description="Coverage amount of the quoted plan")
     base_premium: float = Field(..., ge=0, description="Base premium of the quoted plan")
     duration_years: int = Field(..., ge=1, description="Duration of the quoted plan in years")
-    benefits: list[str] = Field(
+    benefits: List[str] = Field(
         default_factory=list,
         description="List of benefits included in the quoted plan",
     )
-    selected_add_ons: list[SelectedAddOn] = Field(
+    available_add_ons: List[AvailableAddOn] = Field(
+        default_factory=list,
+        description="Embedded list of add-ons available for this quote item",
+    )
+    selected_add_ons: List[SelectedAddOn] = Field(
         default_factory=list,
         description="Embedded list of selected add-ons for this quote item",
     )
@@ -103,21 +123,32 @@ class Quote(Model):
 
     Attributes:
         transaction_id: Identifier of the related transaction from main backend.
+        selected_plan_id: Optional selected provider plan identifier for the
+            transaction.
         items: Embedded list of generated quote items for the transaction.
         created_at: UTC timestamp when the quote document was created.
+        updated_at: UTC timestamp when the quote document was last updated.
     """
 
     transaction_id: str = Field(
         ...,
         description="Identifier of the related main-backend transaction",
     )
-    items: list[QuoteItem] = Field(
+    selected_plan_id: Optional[str] = Field(
+        default=None,
+        description="Optional selected provider plan identifier for the transaction",
+    )
+    items: List[QuoteItem] = Field(
         default_factory=list,
         description="Embedded list of quote items generated for the transaction",
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         description="Timestamp when the quote document was created",
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Timestamp when the quote document was last updated",
     )
 
     model_config = ODMConfigDict(

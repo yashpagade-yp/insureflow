@@ -1,0 +1,734 @@
+{
+  "info": {
+    "_postman_id": "2b3ef2df-0484-4984-9df4-d95a2d842f7a",
+    "name": "InsureFlow API Testing",
+    "description": "End-to-end Postman collection for local InsureFlow testing.\n\nImportant:\n1. Provider-admin and main-admin users must already exist in the database.\n2. OTP values are not returned by the current APIs. Fill OTP variables manually after retrieving them through your own dev-only OTP helper or temporary logging.\n3. After creating the mediator company, copy `plain_api_key` into `backend/main_backend/.env` as `INSUREFLOW_API_KEY=...` and restart main_backend before running the customer journey folder.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "main_base_url",
+      "value": "http://127.0.0.1:5100"
+    },
+    {
+      "key": "provider_base_url",
+      "value": "http://127.0.0.1:5200"
+    },
+    {
+      "key": "provider_admin_email",
+      "value": "provider.admin@example.com"
+    },
+    {
+      "key": "provider_admin_password",
+      "value": "ProviderAdmin123"
+    },
+    {
+      "key": "provider_admin_otp",
+      "value": ""
+    },
+    {
+      "key": "provider_admin_token",
+      "value": ""
+    },
+    {
+      "key": "provider_admin_id",
+      "value": ""
+    },
+    {
+      "key": "insureflow_api_key",
+      "value": ""
+    },
+    {
+      "key": "provider_company_name",
+      "value": "Acme Life Insurance"
+    },
+    {
+      "key": "plan_code",
+      "value": "LIFE-ACME-001"
+    },
+    {
+      "key": "customer_mobile_number",
+      "value": "9999999999"
+    },
+    {
+      "key": "customer_login_otp",
+      "value": ""
+    },
+    {
+      "key": "customer_token",
+      "value": ""
+    },
+    {
+      "key": "user_id",
+      "value": ""
+    },
+    {
+      "key": "transaction_id",
+      "value": ""
+    },
+    {
+      "key": "insurance_detail_id",
+      "value": ""
+    },
+    {
+      "key": "selected_plan_id",
+      "value": ""
+    },
+    {
+      "key": "quote_total_premium",
+      "value": "0"
+    },
+    {
+      "key": "selected_add_ons_json",
+      "value": "[]"
+    },
+    {
+      "key": "payment_reference",
+      "value": ""
+    },
+    {
+      "key": "payment_otp",
+      "value": ""
+    },
+    {
+      "key": "policy_number",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Provider Setup",
+      "description": "Run this folder first.\n\nAfter `Create Mediator Company (InsureFlow)`, copy the returned `plain_api_key` into `backend/main_backend/.env` as `INSUREFLOW_API_KEY=...` and restart main_backend before starting folder 02.",
+      "item": [
+        {
+          "name": "Provider Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{provider_admin_email}}\",\n  \"password\": \"{{provider_admin_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{provider_base_url}}/v1/provider-auth/login",
+              "host": [
+                "{{provider_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "provider-auth",
+                "login"
+              ]
+            },
+            "description": "Starts provider-admin login and generates OTP."
+          }
+        },
+        {
+          "name": "Provider Admin Verify OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('provider_admin_token', json.access_token);",
+                  "pm.collectionVariables.set('provider_admin_id', json.admin_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{provider_admin_email}}\",\n  \"otp\": \"{{provider_admin_otp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{provider_base_url}}/v1/provider-auth/verify-otp",
+              "host": [
+                "{{provider_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "provider-auth",
+                "verify-otp"
+              ]
+            },
+            "description": "Fill `provider_admin_otp` manually before sending."
+          }
+        },
+        {
+          "name": "Create Mediator Company (InsureFlow)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('insureflow_api_key', json.plain_api_key);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_name\": \"InsureFlow\",\n  \"company_type\": \"mediator\",\n  \"created_by_admin_id\": \"{{provider_admin_id}}\",\n  \"contact_person_name\": \"Platform Admin\",\n  \"contact_email\": \"platform@example.com\",\n  \"contact_phone\": \"9999999999\"\n}"
+            },
+            "url": {
+              "raw": "{{provider_base_url}}/v1/companies",
+              "host": [
+                "{{provider_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "companies"
+              ]
+            },
+            "description": "Creates the InsureFlow mediator record and returns a one-time `plain_api_key`.\n\nCopy that key into `backend/main_backend/.env` as `INSUREFLOW_API_KEY=...`, then restart main_backend."
+          }
+        },
+        {
+          "name": "Create Provider Company",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_name\": \"{{provider_company_name}}\",\n  \"company_type\": \"provider\",\n  \"created_by_admin_id\": \"{{provider_admin_id}}\",\n  \"contact_person_name\": \"Provider Ops\",\n  \"contact_email\": \"provider@example.com\",\n  \"contact_phone\": \"8888888888\"\n}"
+            },
+            "url": {
+              "raw": "{{provider_base_url}}/v1/companies",
+              "host": [
+                "{{provider_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "companies"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Provider Plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_name\": \"{{provider_company_name}}\",\n  \"logo_url\": \"https://example.com/logo.png\",\n  \"plan_name\": \"Acme Secure Life Plan\",\n  \"plan_code\": \"{{plan_code}}\",\n  \"insurance_type\": \"life\",\n  \"coverage_amount\": 500000,\n  \"base_premium\": 12000,\n  \"duration_years\": 20,\n  \"benefits\": [\n    \"Life cover\",\n    \"Tax benefit\"\n  ],\n  \"terms\": \"Sample plan terms\",\n  \"available_add_ons\": [\n    {\n      \"name\": \"Critical Illness Rider\",\n      \"description\": \"Additional illness protection\",\n      \"price\": 1500\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{provider_base_url}}/v1/plans",
+              "host": [
+                "{{provider_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "plans"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Provider Plans",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{provider_base_url}}/v1/plans",
+              "host": [
+                "{{provider_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "plans"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Customer Journey",
+      "description": "Run only after the provider setup is complete and `main_backend` has been restarted with the generated `INSUREFLOW_API_KEY`.",
+      "item": [
+        {
+          "name": "Create Insurance Detail Journey",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('user_id', json.user_id);",
+                  "pm.collectionVariables.set('transaction_id', json.transaction_id);",
+                  "pm.collectionVariables.set('insurance_detail_id', json.insurance_detail_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobile_number\": \"{{customer_mobile_number}}\",\n  \"insurance_type\": \"life\",\n  \"proposer_first_name\": \"Yash\",\n  \"proposer_last_name\": \"Patil\",\n  \"proposer_email\": \"yash@example.com\",\n  \"proposer_dob\": \"1998-01-10\",\n  \"proposer_gender\": \"male\",\n  \"insured_members\": [\n    {\n      \"name\": \"Yash Patil\",\n      \"relation\": \"self\",\n      \"age\": 28\n    }\n  ],\n  \"sum_insured_requested\": 500000,\n  \"policy_term_years\": 20,\n  \"premium_preference\": \"yearly\",\n  \"occupation\": \"Engineer\",\n  \"annual_income\": 1200000,\n  \"city\": \"Pune\",\n  \"state\": \"Maharashtra\",\n  \"postal_code\": \"411001\",\n  \"existing_insurance_details\": {\n    \"has_existing_policy\": false\n  },\n  \"medical_history\": {\n    \"diabetes\": false,\n    \"smoker\": false\n  },\n  \"additional_answers\": {\n    \"source\": \"postman\"\n  },\n  \"form_step\": \"completed\",\n  \"is_form_completed\": true\n}"
+            },
+            "url": {
+              "raw": "{{main_base_url}}/v1/insurance-details",
+              "host": [
+                "{{main_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "insurance-details"
+              ]
+            },
+            "description": "This should create the customer journey, create the transaction, and trigger quote generation because `is_form_completed` is true."
+          }
+        },
+        {
+          "name": "Customer Login OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobile_number\": \"{{customer_mobile_number}}\"\n}"
+            },
+            "url": {
+              "raw": "{{main_base_url}}/v1/users/login-otp",
+              "host": [
+                "{{main_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "login-otp"
+              ]
+            },
+            "description": "Generates customer login OTP. Fill `customer_login_otp` manually before the next request."
+          }
+        },
+        {
+          "name": "Customer Verify Login OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('customer_token', json.access_token);",
+                  "pm.collectionVariables.set('user_id', json.user_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobile_number\": \"{{customer_mobile_number}}\",\n  \"otp\": \"{{customer_login_otp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{main_base_url}}/v1/users/login-otp/verify",
+              "host": [
+                "{{main_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "login-otp",
+                "verify"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Quotes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.items && json.items.length > 0) {",
+                  "  const firstItem = json.items[0];",
+                  "  pm.collectionVariables.set('selected_plan_id', firstItem.plan_id);",
+                  "  pm.collectionVariables.set('quote_total_premium', String(firstItem.total_premium));",
+                  "  if (firstItem.available_add_ons && firstItem.available_add_ons.length > 0) {",
+                  "    pm.collectionVariables.set('selected_add_ons_json', JSON.stringify([",
+                  "      {",
+                  "        name: firstItem.available_add_ons[0].name,",
+                  "        price: firstItem.available_add_ons[0].price",
+                  "      }",
+                  "    ]));",
+                  "  } else {",
+                  "    pm.collectionVariables.set('selected_add_ons_json', '[]');",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{main_base_url}}/v1/quotes/{{transaction_id}}",
+              "host": [
+                "{{main_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "quotes",
+                "{{transaction_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Select Plan",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"{{transaction_id}}\",\n  \"selected_plan_id\": \"{{selected_plan_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{main_base_url}}/v1/transactions/select-plan",
+              "host": [
+                "{{main_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "transactions",
+                "select-plan"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Select Add-ons",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"{{transaction_id}}\",\n  \"selected_plan_id\": \"{{selected_plan_id}}\",\n  \"selected_add_ons\": {{selected_add_ons_json}}\n}"
+            },
+            "url": {
+              "raw": "{{main_base_url}}/v1/transactions/select-add-ons",
+              "host": [
+                "{{main_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "transactions",
+                "select-add-ons"
+              ]
+            },
+            "description": "If the chosen quote has no available add-ons, this request still works with an empty array."
+          }
+        },
+        {
+          "name": "Get Transaction",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{main_base_url}}/v1/transactions/{{transaction_id}}",
+              "host": [
+                "{{main_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "transactions",
+                "{{transaction_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('payment_reference', json.payment_reference);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"{{transaction_id}}\",\n  \"user_id\": \"{{user_id}}\",\n  \"amount\": {{quote_total_premium}}\n}"
+            },
+            "url": {
+              "raw": "{{main_base_url}}/v1/payments",
+              "host": [
+                "{{main_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "payments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Send Payment OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{main_base_url}}/v1/payments/{{payment_reference}}/send-otp",
+              "host": [
+                "{{main_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "payments",
+                "{{payment_reference}}",
+                "send-otp"
+              ]
+            },
+            "description": "Generates payment OTP. Fill `payment_otp` manually before the next request."
+          }
+        },
+        {
+          "name": "Verify Payment OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.policy_number) {",
+                  "  pm.collectionVariables.set('policy_number', json.policy_number);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"{{transaction_id}}\",\n  \"payment_reference\": \"{{payment_reference}}\",\n  \"otp\": \"{{payment_otp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{main_base_url}}/v1/payments/verify-otp",
+              "host": [
+                "{{main_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "payments",
+                "verify-otp"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Payment Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{main_base_url}}/v1/payments/{{payment_reference}}/status",
+              "host": [
+                "{{main_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "payments",
+                "{{payment_reference}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List User Policies",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{main_base_url}}/v1/users/{{user_id}}/policies",
+              "host": [
+                "{{main_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "{{user_id}}",
+                "policies"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Policy",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{main_base_url}}/v1/policies/{{policy_number}}",
+              "host": [
+                "{{main_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "policies",
+                "{{policy_number}}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
