@@ -149,3 +149,17 @@ class AdminResponse(BaseModel):
     updated_at: datetime = Field(..., description="Timestamp when the admin was last updated")
 
     model_config = ConfigDict(extra="forbid")
+
+
+class UserListResponse(BaseModel):
+    """Represents a list of user records for the admin dashboard.
+
+    Attributes:
+        items: List of returned user records.
+        total_count: Total number of returned users.
+    """
+
+    items: list[UserResponse] = Field(default_factory=list, description="List of users")
+    total_count: int = Field(..., ge=0, description="Total number of returned users")
+
+    model_config = ConfigDict(extra="forbid")

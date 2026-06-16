@@ -12,6 +12,7 @@ from core.apis.schemas.request_schema.quote_request_schema import QuoteGeneratio
 from core.apis.schemas.response_schema.quote_response_schema import (
     QuoteAvailableAddOnResponse,
     QuoteItemResponse,
+    QuoteListResponse,
     QuoteResponse,
     QuoteSelectedAddOnResponse,
 )
@@ -366,6 +367,29 @@ class QuoteController:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to fetch quote.",
+            )
+
+    async def list_quotes(self) -> QuoteListResponse:
+        """Return all provider quote documents for the admin dashboard."""
+
+        try:
+            logging.info("Executing QuoteController.list_quotes function")
+            quotes = await self.quote_crud.list_all()
+            return QuoteListResponse(
+                items=[self._build_quote_response(item) for item in quotes],
+                total_count=len(quotes),
+            )
+        except HTTPException as httperror:
+            logging.error(
+                "Error in QuoteController.list_quotes function: %s",
+                httperror,
+            )
+            raise httperror
+        except Exception as error:
+            logging.error("Error in QuoteController.list_quotes function: %s", error)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to list quotes.",
             )
 
     def _build_quote_response(self, quote: QuoteModel) -> QuoteResponse:

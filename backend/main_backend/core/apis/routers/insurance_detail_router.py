@@ -9,6 +9,7 @@ from fastapi.security import OAuth2PasswordBearer
 
 from commons.auth import decodeJWT
 from commons.logger import logger
+from core.controllers.transaction_controller import TransactionController
 from core.controllers.insurance_detail_controller import InsuranceDetailController
 from core.apis.schemas.request_schema.insurance_detail_request_schema import (
     InsuranceDetailCreateRequest,
@@ -38,6 +39,30 @@ def _get_authenticated_user(token: str) -> dict:
             detail="Invalid or expired token",
         )
     return authenticated_user_details
+
+
+def _ensure_admin_or_owner(
+    authenticated_user_details: dict,
+    owner_user_id: str,
+    resource_name: str,
+    resource_identifier: str,
+) -> None:
+    """Allow access only to admins or the resource owner."""
+
+    if (
+        authenticated_user_details.get("user_role") != "ADMIN"
+        and authenticated_user_details.get("id") != owner_user_id
+    ):
+        logging.warning(
+            "Unauthorized access attempt to %s %s by user ID %s",
+            resource_name,
+            resource_identifier,
+            authenticated_user_details.get("id"),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this resource",
+        )
 
 
 @insurance_detail_router.post(
@@ -102,7 +127,14 @@ async def update_insurance_detail(
 
     try:
         logging.info("Calling PATCH /v1/insurance-details/%s endpoint", transaction_id)
-        _get_authenticated_user(token)
+        authenticated_user_details = _get_authenticated_user(token)
+        transaction_response = await TransactionController().get_transaction(transaction_id)
+        _ensure_admin_or_owner(
+            authenticated_user_details,
+            transaction_response.user_id,
+            "insurance-detail transaction",
+            transaction_id,
+        )
         return await InsuranceDetailController().update_insurance_detail(
             transaction_id,
             payload,
@@ -153,10 +185,17 @@ async def get_latest_incomplete_journey(
             "Calling GET /v1/users/%s/latest-incomplete-journey endpoint",
             mobile_number,
         )
-        _get_authenticated_user(token)
-        return await InsuranceDetailController().get_latest_incomplete_journey(
+        authenticated_user_details = _get_authenticated_user(token)
+        journey_response = await InsuranceDetailController().get_latest_incomplete_journey(
             mobile_number
         )
+        _ensure_admin_or_owner(
+            authenticated_user_details,
+            journey_response.user_id,
+            "latest incomplete journey",
+            mobile_number,
+        )
+        return journey_response
     except HTTPException as httperror:
         logging.error(
             "Error in GET /v1/users/%s/latest-incomplete-journey endpoint: %s",

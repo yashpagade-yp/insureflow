@@ -92,3 +92,20 @@ class PaymentStatusResponse(BaseModel):
     updated_at: datetime = Field(..., description="Payment last-update timestamp")
 
     model_config = ConfigDict(extra="forbid")
+
+
+class PaymentListResponse(BaseModel):
+    """Represents a list of payment records returned to the provider admin.
+
+    Attributes:
+        items: Returned payment records.
+        total_count: Total number of returned payment records.
+    """
+
+    items: list[PaymentStatusResponse] = Field(
+        default_factory=list,
+        description="Returned payment records",
+    )
+    total_count: int = Field(..., ge=0, description="Total number of returned payments")
+
+    model_config = ConfigDict(extra="forbid")

@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 
+from commons.auth import decodeJWT
 from commons.logger import logger
 from core.controllers.payment_controller import PaymentController
 from core.models.company_model import CompanyModel
@@ -16,14 +18,119 @@ from core.apis.schemas.request_schema.payment_request_schema import (
 )
 from core.apis.schemas.response_schema.payment_response_schema import (
     PaymentCreateResponse,
+    PaymentListResponse,
     PaymentOtpSendResponse,
     PaymentOtpVerifyResponse,
     PaymentStatusResponse,
 )
 
 logging = logger(__name__)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/provider-auth/login")
 router = APIRouter(prefix="/v1/payments", tags=["payments"])
 payment_controller = PaymentController()
+
+
+def _validate_provider_admin(token: str, endpoint_name: str) -> dict:
+    """Validate the provider-admin JWT for protected payment routes."""
+
+    authenticated_user_details = decodeJWT(token=token)
+    if not authenticated_user_details:
+        logging.warning(
+            "Invalid or expired token provided for %s endpoint",
+            endpoint_name,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+
+    if authenticated_user_details.get("user_role") != "ADMIN":
+        logging.warning(
+            "Unauthorized access attempt to %s endpoint by user ID %s",
+            endpoint_name,
+            authenticated_user_details.get("id"),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this resource",
+        )
+
+    return authenticated_user_details
+
+
+@router.get("", response_model=PaymentListResponse)
+async def list_payments(
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> PaymentListResponse:
+    """Return all provider payment records for the provider-admin dashboard.
+
+    Args:
+        token: JWT token provided in the Authorization header.
+
+    Returns:
+        PaymentListResponse: Provider payment-record list response.
+
+    Raises:
+        HTTPException: If payment listing fails.
+    """
+
+    try:
+        logging.info("Calling GET /v1/payments endpoint for provider admin")
+        _validate_provider_admin(token=token, endpoint_name="/v1/payments")
+        return await payment_controller.list_payments()
+    except HTTPException as httperror:
+        logging.error("Error in GET /v1/payments endpoint: %s", httperror)
+        raise httperror
+    except Exception as error:
+        logging.error("Error in GET /v1/payments endpoint: %s", error)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list payment records.",
+        )
+
+
+@router.get("/admin/{payment_reference}", response_model=PaymentStatusResponse)
+async def get_payment_for_admin(
+    payment_reference: str,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> PaymentStatusResponse:
+    """Return one provider payment record for the provider-admin dashboard.
+
+    Args:
+        payment_reference: Business payment reference of the current payment.
+        token: JWT token provided in the Authorization header.
+
+    Returns:
+        PaymentStatusResponse: Provider payment-record response.
+
+    Raises:
+        HTTPException: If payment status cannot be returned.
+    """
+
+    try:
+        logging.info("Calling GET /v1/payments/admin/%s endpoint", payment_reference)
+        _validate_provider_admin(
+            token=token,
+            endpoint_name="/v1/payments/admin/{payment_reference}",
+        )
+        return await payment_controller.get_payment_status(payment_reference)
+    except HTTPException as httperror:
+        logging.error(
+            "Error in GET /v1/payments/admin/%s endpoint: %s",
+            payment_reference,
+            httperror,
+        )
+        raise httperror
+    except Exception as error:
+        logging.error(
+            "Error in GET /v1/payments/admin/%s endpoint: %s",
+            payment_reference,
+            error,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch payment record.",
+        )
 
 
 @router.post("", response_model=PaymentCreateResponse)

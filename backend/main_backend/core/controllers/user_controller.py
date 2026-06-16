@@ -32,6 +32,7 @@ from core.apis.schemas.response_schema.auth_response_schema import (
 )
 from core.apis.schemas.response_schema.user_response_schema import (
     AdminResponse,
+    UserListResponse,
     UserAddressResponse,
     UserLoginOtpResponse,
     UserLoginVerifyResponse,
@@ -449,6 +450,33 @@ class UserController:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to fetch user profile.",
+            )
+
+    async def list_users(self) -> UserListResponse:
+        """Return all users for the admin dashboard.
+
+        Returns:
+            UserListResponse: Ordered list of user records.
+
+        Raises:
+            HTTPException: If user listing fails.
+        """
+
+        try:
+            logging.info("Executing UserController.list_users function")
+            users = await self.user_crud.list_all()
+            return UserListResponse(
+                items=[self._build_user_response(item) for item in users],
+                total_count=len(users),
+            )
+        except HTTPException as httperror:
+            logging.error("Error in UserController.list_users function: %s", httperror)
+            raise httperror
+        except Exception as error:
+            logging.error("Error in UserController.list_users function: %s", error)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to list users.",
             )
 
     async def update_user_profile(

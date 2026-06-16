@@ -126,6 +126,93 @@ class TransactionController:
                 detail="Failed to list user transactions.",
             )
 
+    async def list_all_transactions(self) -> TransactionListResponse:
+        """Return all transactions for the admin dashboard.
+
+        Returns:
+            TransactionListResponse: Ordered list of all transactions.
+
+        Raises:
+            HTTPException: If transaction listing fails.
+        """
+
+        try:
+            logging.info("Executing TransactionController.list_all_transactions function")
+            transactions = await self.transaction_crud.list_all()
+            return TransactionListResponse(
+                items=[self._build_response(item) for item in transactions],
+                total_count=len(transactions),
+            )
+        except HTTPException as httperror:
+            logging.error(
+                "Error in TransactionController.list_all_transactions function: %s",
+                httperror,
+            )
+            raise httperror
+        except Exception as error:
+            logging.error(
+                "Error in TransactionController.list_all_transactions function: %s",
+                error,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to list transactions.",
+            )
+
+    async def list_pending_forms(self) -> TransactionListResponse:
+        """Return all incomplete transactions for pending-form monitoring."""
+
+        try:
+            logging.info("Executing TransactionController.list_pending_forms function")
+            transactions = await self.transaction_crud.list_incomplete()
+            return TransactionListResponse(
+                items=[self._build_response(item) for item in transactions],
+                total_count=len(transactions),
+            )
+        except HTTPException as httperror:
+            logging.error(
+                "Error in TransactionController.list_pending_forms function: %s",
+                httperror,
+            )
+            raise httperror
+        except Exception as error:
+            logging.error(
+                "Error in TransactionController.list_pending_forms function: %s",
+                error,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to list pending forms.",
+            )
+
+    async def list_completed_journeys(self) -> TransactionListResponse:
+        """Return all purchased transactions for completed-journey monitoring."""
+
+        try:
+            logging.info(
+                "Executing TransactionController.list_completed_journeys function"
+            )
+            transactions = await self.transaction_crud.list_completed()
+            return TransactionListResponse(
+                items=[self._build_response(item) for item in transactions],
+                total_count=len(transactions),
+            )
+        except HTTPException as httperror:
+            logging.error(
+                "Error in TransactionController.list_completed_journeys function: %s",
+                httperror,
+            )
+            raise httperror
+        except Exception as error:
+            logging.error(
+                "Error in TransactionController.list_completed_journeys function: %s",
+                error,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to list completed journeys.",
+            )
+
     async def select_plan(self, payload: QuoteSelectPlanRequest) -> TransactionResponse:
         """Save the selected provider plan on a transaction.
 

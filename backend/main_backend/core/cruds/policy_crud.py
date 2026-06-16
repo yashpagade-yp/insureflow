@@ -82,6 +82,17 @@ class PolicyCrud:
             logging.error("Error in PolicyCrud.list_by_user_id function: %s", error)
             raise
 
+    async def list_all(self) -> list[PolicyModel]:
+        """Return all policies, newest first."""
+
+        try:
+            logging.info("Executing PolicyCrud.list_all function")
+            policies = await self.engine.find(PolicyModel)
+            return sorted(policies, key=lambda item: item.created_at, reverse=True)
+        except Exception as error:
+            logging.error("Error in PolicyCrud.list_all function: %s", error)
+            raise
+
     async def update_pdf_url(self, policy: PolicyModel, pdf_url: str) -> PolicyModel:
         """Update the generated PDF URL on a policy."""
         try:
