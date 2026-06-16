@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node/frontend
+node_modules/
+dist/
+
+# Environment files
+.env
+.env.*
+
+# Logs and temporary output
+*.log
+tmp_*.log
+tmp_*_out.log
+tmp_*_err.log
+
+# Generated artifacts
+backend/main_backend/generated_policies/*.pdf
