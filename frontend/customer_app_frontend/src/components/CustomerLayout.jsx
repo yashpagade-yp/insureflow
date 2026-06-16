@@ -21,18 +21,18 @@ function CustomerLayout() {
             to="/customer/app/dashboard"
             className={({ isActive }) => (isActive ? "portal-link portal-link-active" : "portal-link")}
           >
-            Dashboard
+            My account
           </NavLink>
           <NavLink
             to="/customer/app/quotes"
             className={({ isActive }) => (isActive ? "portal-link portal-link-active" : "portal-link")}
           >
-            Quotes and payment
+            Purchase journey
           </NavLink>
         </nav>
 
         <div className="portal-footer">
-          <p className="portal-caption">Logged in mobile</p>
+          <p className="portal-caption">Signed in mobile</p>
           <strong>{session?.mobileNumber}</strong>
           <button type="button" className="secondary-button" onClick={logout}>
             Logout

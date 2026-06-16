@@ -5,6 +5,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import CompaniesPage from "./pages/CompaniesPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
+import OperationsPage from "./pages/OperationsPage";
 import PlansPage from "./pages/PlansPage";
 import VerifyOtpPage from "./pages/VerifyOtpPage";
 
@@ -27,6 +28,7 @@ function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="companies" element={<CompaniesPage />} />
         <Route path="plans" element={<PlansPage />} />
+        <Route path="operations" element={<OperationsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />

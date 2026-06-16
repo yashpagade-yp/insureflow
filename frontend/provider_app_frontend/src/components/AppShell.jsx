@@ -6,6 +6,7 @@ const navigationItems = [
   { to: "/app/dashboard", label: "Overview" },
   { to: "/app/companies", label: "Companies" },
   { to: "/app/plans", label: "Plans" },
+  { to: "/app/operations", label: "Quotes & payments" },
 ];
 
 function AppShell() {

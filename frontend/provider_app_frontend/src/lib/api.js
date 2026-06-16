@@ -2,7 +2,7 @@ import axios from "axios";
 
 const providerApi = axios.create({
   baseURL:
-    import.meta.env.VITE_PROVIDER_API_BASE_URL ?? "http://127.0.0.1:5200",
+    import.meta.env.VITE_PROVIDER_API_BASE_URL ?? "http://127.0.0.1:8001",
   headers: {
     "Content-Type": "application/json",
   },
@@ -84,6 +84,24 @@ export function getPlan(planCode) {
 
 export function updatePlan(planCode, payload) {
   return unwrapRequest(providerApi.patch(`/v1/plans/${planCode}`, payload));
+}
+
+export function listQuotes() {
+  return unwrapRequest(providerApi.get("/v1/quotes"));
+}
+
+export function getAdminQuote(transactionId) {
+  return unwrapRequest(providerApi.get(`/v1/quotes/admin/${transactionId}`));
+}
+
+export function listPayments() {
+  return unwrapRequest(providerApi.get("/v1/payments"));
+}
+
+export function getAdminPayment(paymentReference) {
+  return unwrapRequest(
+    providerApi.get(`/v1/payments/admin/${paymentReference}`)
+  );
 }
 
 export default providerApi;

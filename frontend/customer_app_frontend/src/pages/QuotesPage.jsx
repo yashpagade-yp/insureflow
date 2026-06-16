@@ -9,8 +9,8 @@ import {
   getQuotes,
   selectAddOns,
   selectPlan,
-  verifyPaymentOtp,
   sendPaymentOtp,
+  verifyPaymentOtp,
 } from "../lib/api";
 import {
   getStoredJourneyDraft,
@@ -18,7 +18,11 @@ import {
   storeJourneyDraft,
 } from "../lib/storage";
 
-const FLOW_STEPS = ["View plans", "Add-ons", "Payment", "Complete"];
+const FLOW_STEPS = ["Choose plan", "Add add-ons", "Payment", "Policy"];
+
+function formatCurrency(value) {
+  return `Rs. ${Number(value || 0).toLocaleString()}`;
+}
 
 function StepBar({ currentStep }) {
   return (
@@ -85,9 +89,7 @@ function QuotesPage() {
   const [status, setStatus] = useState({ type: "", message: "" });
   const [isLoading, setIsLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(storedDraft?.currentStep || 0);
-  const [policyNumber, setPolicyNumber] = useState(
-    storedDraft?.policyNumber || ""
-  );
+  const [policyNumber, setPolicyNumber] = useState(storedDraft?.policyNumber || "");
 
   useEffect(() => {
     storeJourneyDraft({
@@ -121,7 +123,7 @@ function QuotesPage() {
     if (!transactionId) {
       setStatus({
         type: "error",
-        message: "Create or resume a journey first to fetch quotes.",
+        message: "Start your application first so we can prepare your matching plans.",
       });
       return;
     }
@@ -140,24 +142,54 @@ function QuotesPage() {
             Number(item.coverage_amount) <= Number(journeyMeta.sumInsuredRequested)
         ) ?? [];
 
+      const sortedPlans = [...eligiblePlans].sort(
+        (left, right) => Number(left.total_premium) - Number(right.total_premium)
+      );
+
       const nextSelectedPlanId =
         storedDraft?.selectedPlanId ||
         response.selected_plan_id ||
-        eligiblePlans[0]?.plan_id ||
+        sortedPlans[0]?.plan_id ||
         response.items?.[0]?.plan_id ||
         "";
 
       setSelectedPlanId(nextSelectedPlanId);
     } catch (error) {
+      if (error.message?.includes("Quote not found")) {
+        removeStoredJourneyDraft();
+        setQuoteData(null);
+        setJourneyMeta((currentValue) => ({
+          ...currentValue,
+          transactionId: "",
+          userId: session?.userId || "",
+          mobileNumber: session?.mobileNumber || "",
+          proposerName: "",
+          insuranceType: "health",
+          sumInsuredRequested: 0,
+        }));
+        setStatus({
+          type: "error",
+          message: "This old journey is no longer available. Please start a fresh application or resume your latest saved policy journey.",
+        });
+        return;
+      }
+
       setStatus({ type: "error", message: error.message });
     } finally {
       setIsLoading(false);
     }
   };
 
+  const visiblePlans = useMemo(() => {
+    const items = quoteData?.items ?? [];
+    return [...items].sort(
+      (left, right) => Number(left.total_premium) - Number(right.total_premium)
+    );
+  }, [quoteData]);
+
   const selectedPlan = useMemo(
-    () => quoteData?.items?.find((item) => item.plan_id === selectedPlanId) ?? null,
-    [quoteData, selectedPlanId]
+    () => visiblePlans.find((item) => item.plan_id === selectedPlanId) ?? null,
+    [visiblePlans, selectedPlanId]
   );
 
   const basePremium = Number(selectedPlan?.base_premium || 0);
@@ -207,12 +239,15 @@ function QuotesPage() {
       await selectAddOns({
         transaction_id: journeyMeta.transactionId,
         selected_plan_id: selectedPlanId,
-        selected_add_ons: selectedAddOns,
+        selected_add_ons: selectedAddOns.map((item) => ({
+          name: item.name,
+          price: item.price,
+        })),
       });
       setCurrentStep(2);
       setStatus({
         type: "success",
-        message: "Add-ons saved. Continue to payment.",
+        message: "Your add-ons are saved. You can continue to payment.",
       });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
@@ -225,7 +260,7 @@ function QuotesPage() {
     if (!paymentState.mobileNumber) {
       setStatus({
         type: "error",
-        message: "Enter the mobile number that should receive the payment OTP.",
+        message: "Enter the mobile number for payment verification.",
       });
       return;
     }
@@ -256,9 +291,7 @@ function QuotesPage() {
 
       setStatus({
         type: "success",
-        message: otpResponse.plain_otp
-          ? "Payment OTP sent. In dev mode, the OTP is shown below as well."
-          : "Payment OTP sent to the registered mobile number.",
+        message: "Payment OTP sent. You can use the mock OTP shown below for testing.",
       });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
@@ -271,7 +304,7 @@ function QuotesPage() {
     if (!paymentState.paymentReference || !paymentState.otp) {
       setStatus({
         type: "error",
-        message: "Send the OTP first, then enter it to complete payment.",
+        message: "Send the OTP first and then enter it to finish payment.",
       });
       return;
     }
@@ -290,8 +323,7 @@ function QuotesPage() {
       setCurrentStep(3);
       setStatus({
         type: "success",
-        message:
-          "Payment verified and policy issued successfully. You can now access your policy details.",
+        message: "Payment successful. Your policy has been issued.",
       });
       removeStoredJourneyDraft();
     } catch (error) {
@@ -301,37 +333,44 @@ function QuotesPage() {
     }
   };
 
+  if (!journeyMeta.transactionId && !quoteData) {
+    return (
+      <div className="page-stack customer-flow-page">
+        <header className="page-header page-header-tight">
+          <p className="eyebrow-text">Health plans</p>
+          <h2>Start your application first to unlock your personalised quotes.</h2>
+        </header>
+
+        <SectionCard
+          title="No active application found"
+          subtitle="We could not find a draft journey to show matching plans right now."
+        >
+          <EmptyState
+            title="Start with the insurance form"
+            description="Complete the customer application first. After that, this page will show your matching plans, add-ons, payment step, and issued policy flow."
+          />
+          <div className="button-row customer-flow-actions">
+            <Link to="/journey/new" className="primary-button">
+              Start application
+            </Link>
+            <Link to="/customer/login" className="ghost-button">
+              Customer login
+            </Link>
+          </div>
+        </SectionCard>
+      </div>
+    );
+  }
+
   return (
     <div className="page-stack customer-flow-page">
       <header className="page-header page-header-tight">
-        <p className="eyebrow-text">Customer purchase flow</p>
-        <h2>Move from quote selection to policy issuance in one guided journey.</h2>
+        <p className="eyebrow-text">Health plans</p>
+        <h2>Choose the plan that protects you best.</h2>
         <p className="page-copy">
-          Review quotes, choose one plan, optionally add riders, verify payment
-          by OTP, and complete the policy purchase without leaving the flow.
+          Compare benefits, review optional add-ons, and complete your purchase in one smooth flow.
         </p>
       </header>
-
-      <section className="journey-overview-card journey-overview-card-compact">
-        <div className="journey-overview-copy">
-          <p className="eyebrow-text">Current journey</p>
-          <h3>
-            {journeyMeta.proposerName || "Customer journey"}{" "}
-            {journeyMeta.mobileNumber ? `• ${journeyMeta.mobileNumber}` : ""}
-          </h3>
-          <p>
-            Transaction ID:{" "}
-            <strong>{journeyMeta.transactionId || "Create or resume a journey"}</strong>
-          </p>
-        </div>
-        <div className="journey-overview-steps">
-          <span>{journeyMeta.insuranceType} insurance</span>
-          <span>
-            Sum insured: ₹
-            {Number(journeyMeta.sumInsuredRequested || 0).toLocaleString()}
-          </span>
-        </div>
-      </section>
 
       {status.message ? (
         <div
@@ -349,67 +388,35 @@ function QuotesPage() {
 
       {!quoteData ? (
         <SectionCard
-          title="Load provider quotes"
-          subtitle="Continue from a created journey or use a saved transaction to fetch plans."
+          title="Preparing your matching plans"
+          subtitle="Please wait while we gather the best matching plans for your application."
         >
-          <div className="stacked-fields">
-            <label className="field-label">
-              <span>Transaction ID</span>
-              <input
-                className="field-input"
-                value={journeyMeta.transactionId}
-                onChange={(event) =>
-                  setJourneyMeta((currentValue) => ({
-                    ...currentValue,
-                    transactionId: event.target.value,
-                  }))
-                }
-                placeholder="Enter transaction ID"
-              />
-            </label>
-
-            <div className="button-row customer-flow-actions">
-              <Link to="/journey/new" className="ghost-button">
-                Start a new journey
-              </Link>
-              <Link
-                to="/customer/login"
-                className="ghost-button"
-                state={{ mobileNumber: journeyMeta.mobileNumber }}
-              >
-                Resume with OTP
-              </Link>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => loadQuotes(journeyMeta.transactionId)}
-                disabled={isLoading}
-              >
-                {isLoading ? "Loading..." : "Fetch quotes"}
-              </button>
-            </div>
+          <div className="button-row customer-flow-actions">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => loadQuotes(journeyMeta.transactionId)}
+              disabled={isLoading}
+            >
+              {isLoading ? "Loading plans..." : "Load my plans"}
+            </button>
+            <Link to="/journey/new" className="ghost-button">
+              Back to form
+            </Link>
           </div>
         </SectionCard>
       ) : null}
 
       {quoteData && currentStep === 0 ? (
         <SectionCard
-          title="Choose your plan"
-          subtitle="Compare plans returned by the provider network and confirm the best fit."
+          title="Available plans"
+          subtitle="These plans are matched to the details you submitted in your insurance application."
         >
-          {journeyMeta.sumInsuredRequested ? (
-            <div className="coverage-filter-note">
-              Plans above your requested sum insured are shown for visibility,
-              but only eligible plans are selectable.
-            </div>
-          ) : null}
-
           <div className="customer-plan-grid">
-            {quoteData.items.map((item) => {
+            {visiblePlans.map((item) => {
               const isEligible =
                 !journeyMeta.sumInsuredRequested ||
-                Number(item.coverage_amount) <=
-                  Number(journeyMeta.sumInsuredRequested);
+                Number(item.coverage_amount) <= Number(journeyMeta.sumInsuredRequested);
               const isSelected = item.plan_id === selectedPlanId;
 
               return (
@@ -422,36 +429,48 @@ function QuotesPage() {
                 >
                   <div className="customer-plan-header">
                     <div>
+                      <p className="eyebrow-text">{item.company_name}</p>
                       <h3>{item.plan_name}</h3>
-                      <p>{item.company_name}</p>
                     </div>
-                    <span className="info-chip">{item.quote_status}</span>
+                    <span className="quote-price-badge">
+                      {formatCurrency(item.total_premium)}
+                    </span>
                   </div>
 
                   <div className="customer-plan-metrics">
                     <div>
                       <span>Coverage</span>
-                      <strong>₹{Number(item.coverage_amount).toLocaleString()}</strong>
+                      <strong>{formatCurrency(item.coverage_amount)}</strong>
                     </div>
                     <div>
                       <span>Base premium</span>
-                      <strong>₹{Number(item.base_premium).toLocaleString()}</strong>
+                      <strong>{formatCurrency(item.base_premium)}</strong>
                     </div>
                     <div>
-                      <span>Duration</span>
-                      <strong>{item.duration_years} years</strong>
+                      <span>Policy term</span>
+                      <strong>{item.duration_years} year{item.duration_years > 1 ? "s" : ""}</strong>
                     </div>
                   </div>
 
-                  {item.benefits.length ? (
+                  <div className="quote-benefits-block">
+                    <strong className="quote-section-title">Key benefits</strong>
                     <div className="chip-list">
-                      {item.benefits.slice(0, 4).map((benefit) => (
-                        <span key={benefit} className="info-chip">
-                          {benefit}
-                        </span>
-                      ))}
+                      {item.benefits?.length ? (
+                        item.benefits.slice(0, 5).map((benefit) => (
+                          <span key={benefit} className="info-chip">
+                            {benefit}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="info-chip">Benefits available on plan details</span>
+                      )}
                     </div>
-                  ) : null}
+                  </div>
+
+                  <div className="quote-plan-footer">
+                    <span>{item.available_add_ons?.length || 0} optional add-ons</span>
+                    <span>{formatCurrency(item.tax_amount)} tax included</span>
+                  </div>
                 </article>
               );
             })}
@@ -459,7 +478,7 @@ function QuotesPage() {
 
           <div className="button-row customer-flow-actions">
             <Link to="/journey/new" className="ghost-button">
-              ← Back to form
+              Back to application
             </Link>
             <button
               type="button"
@@ -467,7 +486,7 @@ function QuotesPage() {
               onClick={handleConfirmPlan}
               disabled={!selectedPlanId || isLoading}
             >
-              {isLoading ? "Saving..." : "Confirm selected plan"}
+              {isLoading ? "Saving plan..." : "Continue with this plan"}
             </button>
           </div>
         </SectionCard>
@@ -475,9 +494,17 @@ function QuotesPage() {
 
       {quoteData && currentStep === 1 ? (
         <SectionCard
-          title="Select optional add-ons"
-          subtitle="Choose only the riders you actually want to add to the selected plan."
+          title="Optional add-ons"
+          subtitle="Add extra protection only if you want it for your selected plan."
         >
+          <div className="selected-plan-summary">
+            <p className="eyebrow-text">Selected plan</p>
+            <h3>{selectedPlan?.plan_name || "Chosen plan"}</h3>
+            <p className="muted-copy">
+              {selectedPlan?.company_name || ""} · Base premium {formatCurrency(basePremium)}
+            </p>
+          </div>
+
           {selectedPlan?.available_add_ons?.length ? (
             <div className="stacked-fields">
               {selectedPlan.available_add_ons.map((addOn) => {
@@ -498,15 +525,15 @@ function QuotesPage() {
                         <p className="muted-copy">{addOn.description}</p>
                       </div>
                     </div>
-                    <strong>₹{Number(addOn.price).toLocaleString()}</strong>
+                    <strong>{formatCurrency(addOn.price)}</strong>
                   </label>
                 );
               })}
             </div>
           ) : (
             <EmptyState
-              title="No add-ons on this plan"
-              description="This plan can be purchased directly without any optional add-ons."
+              title="No add-ons available"
+              description="This plan can be purchased directly without any extra rider selection."
             />
           )}
 
@@ -516,7 +543,7 @@ function QuotesPage() {
               className="ghost-button"
               onClick={() => setCurrentStep(0)}
             >
-              ← Back to plan selection
+              Back to plans
             </button>
             <button
               type="button"
@@ -524,7 +551,7 @@ function QuotesPage() {
               onClick={handleSaveAddOns}
               disabled={isLoading}
             >
-              {isLoading ? "Saving..." : "Continue to payment"}
+              {isLoading ? "Saving add-ons..." : "Continue to payment"}
             </button>
           </div>
         </SectionCard>
@@ -532,12 +559,12 @@ function QuotesPage() {
 
       {quoteData && currentStep === 2 ? (
         <SectionCard
-          title="Payment verification"
-          subtitle="We create the payment automatically and then verify it using OTP."
+          title="Complete your payment"
+          subtitle="Verify the payment using the mock OTP for this demo customer flow."
         >
           <div className="payment-layout">
             <div className="payment-summary-card">
-              <p className="eyebrow-text">Insurance summary</p>
+              <p className="eyebrow-text">Plan summary</p>
               <h3>{selectedPlan?.plan_name || "Selected plan"}</h3>
               <p className="muted-copy">
                 {selectedPlan?.company_name || "Provider company"}
@@ -545,25 +572,30 @@ function QuotesPage() {
 
               <div className="payment-line-item">
                 <span>Base premium</span>
-                <strong>₹{basePremium.toLocaleString()}</strong>
+                <strong>{formatCurrency(basePremium)}</strong>
               </div>
 
               {selectedAddOns.map((addOn) => (
                 <div key={addOn.name} className="payment-line-item">
-                  <span>+ {addOn.name}</span>
-                  <strong>₹{Number(addOn.price).toLocaleString()}</strong>
+                  <span>{addOn.name}</span>
+                  <strong>{formatCurrency(addOn.price)}</strong>
                 </div>
               ))}
 
+              <div className="payment-line-item">
+                <span>Tax</span>
+                <strong>{formatCurrency(selectedPlan?.tax_amount || 0)}</strong>
+              </div>
+
               <div className="payment-total-row">
                 <span>Total payable</span>
-                <strong>₹{totalPremium.toLocaleString()}</strong>
+                <strong>{formatCurrency(totalPremium)}</strong>
               </div>
             </div>
 
             <div className="payment-action-card">
               <label className="field-label">
-                <span>Mobile number for payment OTP</span>
+                <span>Mobile number</span>
                 <input
                   className="field-input"
                   value={paymentState.mobileNumber}
@@ -577,26 +609,19 @@ function QuotesPage() {
                 />
               </label>
 
-              {paymentState.paymentReference ? (
-                <div className="payment-reference-banner">
-                  <strong>Payment reference</strong>
-                  <span>{paymentState.paymentReference}</span>
-                </div>
-              ) : null}
-
               {paymentState.plainOtp ? (
                 <div className="payment-otp-preview">
-                  <p className="eyebrow-text">Dev OTP preview</p>
+                  <p className="eyebrow-text">Mock OTP</p>
                   <h3>{paymentState.plainOtp}</h3>
                   <p className="muted-copy">
-                    Use this OTP directly in dev mode instead of checking SMS.
+                    Use this demo OTP to complete the payment verification step.
                   </p>
                 </div>
               ) : null}
 
               {paymentState.paymentReference ? (
                 <label className="field-label">
-                  <span>Enter payment OTP</span>
+                  <span>Enter OTP</span>
                   <input
                     className="field-input field-input-large"
                     value={paymentState.otp}
@@ -617,7 +642,7 @@ function QuotesPage() {
                   className="ghost-button"
                   onClick={() => setCurrentStep(1)}
                 >
-                  ← Back to add-ons
+                  Back to add-ons
                 </button>
 
                 {!paymentState.paymentReference ? (
@@ -627,9 +652,7 @@ function QuotesPage() {
                     onClick={handleSendPaymentOtp}
                     disabled={isLoading}
                   >
-                    {isLoading
-                      ? "Sending OTP..."
-                      : `Send OTP for ₹${totalPremium.toLocaleString()}`}
+                    {isLoading ? "Sending OTP..." : "Send payment OTP"}
                   </button>
                 ) : (
                   <>
@@ -647,7 +670,7 @@ function QuotesPage() {
                       onClick={handleVerifyPaymentOtp}
                       disabled={!paymentState.otp || isLoading}
                     >
-                      {isLoading ? "Verifying..." : "Verify OTP"}
+                      {isLoading ? "Verifying..." : "Complete payment"}
                     </button>
                   </>
                 )}
@@ -659,16 +682,15 @@ function QuotesPage() {
 
       {quoteData && currentStep === 3 ? (
         <SectionCard
-          title="Policy issued successfully"
-          subtitle="The customer journey is complete and the policy record has been created."
+          title="Your policy is ready"
+          subtitle="Payment is complete and your purchase journey has been successfully finished."
         >
           <div className="completion-card">
             <div>
-              <p className="eyebrow-text">Completed</p>
-              <h3>Policy number: {policyNumber}</h3>
+              <p className="eyebrow-text">Purchase complete</p>
+              <h3>{policyNumber ? `Policy number: ${policyNumber}` : "Policy issued successfully"}</h3>
               <p className="muted-copy">
-                Transaction {journeyMeta.transactionId} has moved from quote
-                selection to policy issuance successfully.
+                You can now log in later with your mobile number and mock OTP to view your dashboard and access policy details.
               </p>
             </div>
 
@@ -678,7 +700,7 @@ function QuotesPage() {
                 className="ghost-button"
                 state={{ mobileNumber: journeyMeta.mobileNumber }}
               >
-                Resume later with OTP
+                Customer login
               </Link>
               <Link to="/" className="primary-button">
                 Back to home

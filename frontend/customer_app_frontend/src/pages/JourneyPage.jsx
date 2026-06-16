@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { createJourney } from "../lib/api";
 import { storeJourneyDraft } from "../lib/storage";
@@ -23,6 +23,13 @@ const initialFormState = {
   is_form_completed: false,
 };
 
+const coverageOptions = [
+  { value: "300000", label: "Rs. 3 lakh", helper: "Entry-level protection" },
+  { value: "500000", label: "Rs. 5 lakh", helper: "Balanced family cover" },
+  { value: "1000000", label: "Rs. 10 lakh", helper: "Higher medical cushion" },
+  { value: "1500000", label: "Rs. 15 lakh", helper: "Broader protection" },
+];
+
 function JourneyPage() {
   const navigate = useNavigate();
   const [formState, setFormState] = useState(initialFormState);
@@ -42,6 +49,8 @@ function JourneyPage() {
     try {
       const response = await createJourney({
         ...formState,
+        form_step: "completed",
+        is_form_completed: true,
         sum_insured_requested: Number(formState.sum_insured_requested || 0),
         policy_term_years: Number(formState.policy_term_years || 0),
         annual_income: Number(formState.annual_income || 0),
@@ -53,7 +62,7 @@ function JourneyPage() {
 
       setStatus({
         type: "success",
-        message: `Journey created. Transaction ID: ${response.transaction_id}`,
+        message: "Application submitted successfully. Preparing your matching plans.",
       });
       storeJourneyDraft({
         transactionId: response.transaction_id,
@@ -86,34 +95,52 @@ function JourneyPage() {
   return (
     <div className="public-page">
       <header className="page-header">
-        <p className="eyebrow-text">Customer onboarding</p>
-        <h1>Start a health insurance journey in one guided flow.</h1>
+        <p className="eyebrow-text">Health insurance application</p>
+        <h1>Tell us about yourself and we will match plans that fit your needs.</h1>
         <p className="page-copy">
-          Enter the basic applicant and coverage information. After this, the customer can resume with OTP and continue to quotes.
+          Start with your personal and coverage details. Once this form is submitted,
+          you can review quotes, choose a plan, and continue to payment.
         </p>
       </header>
 
       <section className="journey-overview-card">
         <div className="journey-overview-copy">
-          <p className="eyebrow-text">Customer flow</p>
-          <h2>Form → Quotes → Add-ons → Payment → Policy</h2>
+          <p className="eyebrow-text">Why health cover matters</p>
+          <h2>Choose protection that keeps medical care affordable when life feels uncertain.</h2>
           <p>
-            Fill the health insurance form once, compare plans matched by the
-            provider network, optionally add riders, verify payment by OTP, and
-            receive the issued policy at the end of the journey.
+            The right health insurance plan helps you manage hospital costs,
+            secure your family, and stay prepared for unexpected treatment expenses.
           </p>
         </div>
         <div className="journey-overview-steps">
-          <span>1. Create journey</span>
-          <span>2. Review quotes</span>
-          <span>3. Add add-ons</span>
-          <span>4. Verify payment</span>
-          <span>5. Download policy</span>
+          <span>Cashless hospital support</span>
+          <span>Protection against rising medical costs</span>
+          <span>Coverage options for different budgets</span>
+          <span>Optional add-ons for stronger protection</span>
+          <span>Easy access to your policy after purchase</span>
         </div>
       </section>
 
       <section className="section-card">
+        <div className="section-head">
+          <div>
+            <p className="eyebrow-text">Application form</p>
+            <h3>Start your health cover request</h3>
+            <p>
+              Complete the form below to generate your quote options. Keep your
+              contact details correct so the right policy can be linked to your journey.
+            </p>
+          </div>
+        </div>
+
         <form className="form-grid" onSubmit={handleSubmit}>
+          <div className="form-section form-span-full">
+            <div className="form-section-heading">
+              <h4>Applicant details</h4>
+              <p>Basic information about the person starting the insurance request.</p>
+            </div>
+          </div>
+
           <label className="field-label">
             <span>Mobile number</span>
             <input
@@ -121,23 +148,9 @@ function JourneyPage() {
               name="mobile_number"
               value={formState.mobile_number}
               onChange={updateField}
-              placeholder="9876543210"
+              placeholder="Enter 10-digit mobile number"
               required
             />
-          </label>
-
-          <label className="field-label">
-            <span>Insurance type</span>
-            <select
-              className="field-input"
-              name="insurance_type"
-              value={formState.insurance_type}
-              onChange={updateField}
-            >
-              <option value="health">Health</option>
-              <option value="life">Life</option>
-              <option value="general">General</option>
-            </select>
           </label>
 
           <label className="field-label">
@@ -147,7 +160,8 @@ function JourneyPage() {
               name="proposer_first_name"
               value={formState.proposer_first_name}
               onChange={updateField}
-              placeholder="Yash"
+              placeholder="Enter first name"
+              required
             />
           </label>
 
@@ -158,7 +172,8 @@ function JourneyPage() {
               name="proposer_last_name"
               value={formState.proposer_last_name}
               onChange={updateField}
-              placeholder="Pagade"
+              placeholder="Enter last name"
+              required
             />
           </label>
 
@@ -170,7 +185,8 @@ function JourneyPage() {
               name="proposer_email"
               value={formState.proposer_email}
               onChange={updateField}
-              placeholder="customer@example.com"
+              placeholder="name@example.com"
+              required
             />
           </label>
 
@@ -181,22 +197,44 @@ function JourneyPage() {
               name="proposer_gender"
               value={formState.proposer_gender}
               onChange={updateField}
+              required
             >
-              <option value="">Select</option>
+              <option value="">Select gender</option>
               <option value="male">Male</option>
               <option value="female">Female</option>
               <option value="other">Other</option>
             </select>
           </label>
 
+          <div className="form-section form-span-full">
+            <div className="form-section-heading">
+              <h4>Location details</h4>
+              <p>This helps us align the application with your city and address region.</p>
+            </div>
+          </div>
+
           <label className="field-label">
             <span>City</span>
-            <input className="field-input" name="city" value={formState.city} onChange={updateField} />
+            <input
+              className="field-input"
+              name="city"
+              value={formState.city}
+              onChange={updateField}
+              placeholder="Enter city"
+              required
+            />
           </label>
 
           <label className="field-label">
             <span>State</span>
-            <input className="field-input" name="state" value={formState.state} onChange={updateField} />
+            <input
+              className="field-input"
+              name="state"
+              value={formState.state}
+              onChange={updateField}
+              placeholder="Enter state"
+              required
+            />
           </label>
 
           <label className="field-label">
@@ -206,20 +244,34 @@ function JourneyPage() {
               name="postal_code"
               value={formState.postal_code}
               onChange={updateField}
+              placeholder="Enter postal code"
+              required
             />
           </label>
 
+          <div className="form-section form-span-full">
+            <div className="form-section-heading">
+              <h4>Coverage preferences</h4>
+              <p>Select your preferred sum insured and a few details that help us prepare better quotes.</p>
+            </div>
+          </div>
+
           <label className="field-label">
             <span>Requested sum insured</span>
-            <input
+            <select
               className="field-input"
-              type="number"
-              min="0"
               name="sum_insured_requested"
               value={formState.sum_insured_requested}
               onChange={updateField}
-              placeholder="500000"
-            />
+              required
+            >
+              <option value="">Select cover amount</option>
+              {coverageOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label} · {option.helper}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="field-label">
@@ -231,7 +283,8 @@ function JourneyPage() {
               name="policy_term_years"
               value={formState.policy_term_years}
               onChange={updateField}
-              placeholder="1"
+              placeholder="For example: 1"
+              required
             />
           </label>
 
@@ -242,7 +295,8 @@ function JourneyPage() {
               name="premium_preference"
               value={formState.premium_preference}
               onChange={updateField}
-              placeholder="Balanced premium"
+              placeholder="For example: Balanced cover"
+              required
             />
           </label>
 
@@ -253,7 +307,8 @@ function JourneyPage() {
               name="occupation"
               value={formState.occupation}
               onChange={updateField}
-              placeholder="Engineer"
+              placeholder="For example: Engineer"
+              required
             />
           </label>
 
@@ -266,23 +321,27 @@ function JourneyPage() {
               name="annual_income"
               value={formState.annual_income}
               onChange={updateField}
-              placeholder="1200000"
+              placeholder="For example: 1200000"
+              required
             />
           </label>
 
           {status.message ? (
-            <div className={status.type === "error" ? "alert-box alert-error form-span-full" : "alert-box alert-success form-span-full"}>
+            <div
+              className={
+                status.type === "error"
+                  ? "alert-box alert-error form-span-full"
+                  : "alert-box alert-success form-span-full"
+              }
+            >
               {status.message}
             </div>
           ) : null}
 
           <div className="form-actions form-span-full">
             <button type="submit" className="primary-button" disabled={isSubmitting}>
-              {isSubmitting ? "Creating journey..." : "Create journey"}
+              {isSubmitting ? "Preparing your quotes..." : "Continue to quotes"}
             </button>
-            <Link to="/customer/login" className="secondary-button">
-              Already started? Resume with OTP
-            </Link>
           </div>
         </form>
       </section>
