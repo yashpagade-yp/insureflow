@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const mainApi = axios.create({
-  baseURL: import.meta.env.VITE_MAIN_API_BASE_URL ?? "http://127.0.0.1:5100",
+  baseURL: import.meta.env.VITE_MAIN_API_BASE_URL ?? "http://127.0.0.1:8000",
   headers: {
     "Content-Type": "application/json",
   },
@@ -139,6 +139,50 @@ export function attachPolicyPdf(policyNumber, payload) {
 
 export function getUserProfile(userId) {
   return unwrapRequest(mainApi.get(`/v1/users/${userId}`));
+}
+
+export function createTicket(userId, payload) {
+  return unwrapRequest(mainApi.post(`/v1/users/${userId}/tickets`, payload));
+}
+
+export function listUserTickets(userId) {
+  return unwrapRequest(mainApi.get(`/v1/users/${userId}/tickets`));
+}
+
+export function updateUserTicket(userId, ticketId, payload) {
+  return unwrapRequest(
+    mainApi.patch(`/v1/users/${userId}/tickets/${ticketId}`, payload)
+  );
+}
+
+export function listAdminUsers() {
+  return unwrapRequest(mainApi.get("/v1/admins/users"));
+}
+
+export function listAdminTransactions() {
+  return unwrapRequest(mainApi.get("/v1/admins/transactions"));
+}
+
+export function listAdminPendingForms() {
+  return unwrapRequest(mainApi.get("/v1/admins/transactions/pending-forms"));
+}
+
+export function listAdminCompletedJourneys() {
+  return unwrapRequest(
+    mainApi.get("/v1/admins/transactions/completed-journeys")
+  );
+}
+
+export function listAdminPolicies() {
+  return unwrapRequest(mainApi.get("/v1/admins/policies"));
+}
+
+export function listAdminTickets() {
+  return unwrapRequest(mainApi.get("/v1/admins/tickets"));
+}
+
+export function respondToAdminTicket(ticketId, payload) {
+  return unwrapRequest(mainApi.patch(`/v1/admins/tickets/${ticketId}`, payload));
 }
 
 export default mainApi;

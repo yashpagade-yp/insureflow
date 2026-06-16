@@ -21,13 +21,13 @@ function AdminLayout() {
             to="/admin/app/dashboard"
             className={({ isActive }) => (isActive ? "portal-link portal-link-active" : "portal-link")}
           >
-            Overview
+            Operations
           </NavLink>
           <NavLink
             to="/admin/app/policy-hub"
             className={({ isActive }) => (isActive ? "portal-link portal-link-active" : "portal-link")}
           >
-            Policy hub
+            Policies and tickets
           </NavLink>
         </nav>
 

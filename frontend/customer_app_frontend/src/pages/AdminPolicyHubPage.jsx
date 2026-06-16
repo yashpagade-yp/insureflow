@@ -1,100 +1,117 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import EmptyState from "../components/EmptyState";
 import SectionCard from "../components/SectionCard";
-import { attachPolicyPdf, getPolicy, issuePolicy } from "../lib/api";
+import {
+  getPolicy,
+  listAdminPolicies,
+  listAdminTickets,
+  respondToAdminTicket,
+} from "../lib/api";
 
-const initialIssueState = {
-  transaction_id: "",
-  user_id: "",
-  company_name: "",
-  plan_name: "",
-  coverage_amount: "",
-  base_premium: "",
-  add_on_name: "",
-  add_on_price: "",
-  add_on_total: "",
-  tax_amount: "",
-  total_premium: "",
-  payment_reference: "",
-  pdf_url: "",
-  duration_years: "1",
-};
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
 
 function AdminPolicyHubPage() {
-  const [issueState, setIssueState] = useState(initialIssueState);
   const [policyLookup, setPolicyLookup] = useState("");
-  const [pdfAttachState, setPdfAttachState] = useState({ policyNumber: "", pdfUrl: "" });
-  const [policyDetail, setPolicyDetail] = useState(null);
+  const [selectedPolicy, setSelectedPolicy] = useState(null);
+  const [policies, setPolicies] = useState([]);
+  const [tickets, setTickets] = useState([]);
+  const [resolutionForm, setResolutionForm] = useState({
+    ticketId: "",
+    ticket_status: "RESOLVED",
+    admin_response: "",
+  });
   const [status, setStatus] = useState({ type: "", message: "" });
+  const [isLoading, setIsLoading] = useState(false);
 
-  const updateIssueField = (event) => {
-    const { name, value } = event.target;
-    setIssueState((currentState) => ({ ...currentState, [name]: value }));
-  };
+  const activeTickets = useMemo(
+    () =>
+      tickets.filter(
+        (ticket) => !["RESOLVED", "CLOSED"].includes(ticket.ticket_status)
+      ),
+    [tickets]
+  );
 
-  const submitPolicyIssue = async (event) => {
-    event.preventDefault();
+  async function loadOpsData() {
+    setIsLoading(true);
+    setStatus({ type: "", message: "" });
 
     try {
-      const addOns = issueState.add_on_name
-        ? [{ name: issueState.add_on_name, price: Number(issueState.add_on_price || 0) }]
-        : [];
-
-      const response = await issuePolicy({
-        transaction_id: issueState.transaction_id,
-        user_id: issueState.user_id,
-        company_name: issueState.company_name,
-        plan_name: issueState.plan_name,
-        coverage_amount: Number(issueState.coverage_amount),
-        base_premium: Number(issueState.base_premium),
-        add_ons: addOns,
-        add_on_total: Number(issueState.add_on_total || 0),
-        tax_amount: Number(issueState.tax_amount || 0),
-        total_premium: Number(issueState.total_premium || 0),
-        payment_reference: issueState.payment_reference,
-        pdf_url: issueState.pdf_url || null,
-        duration_years: Number(issueState.duration_years || 1),
-      });
-
-      setPolicyDetail(response);
+      const [policyResponse, ticketResponse] = await Promise.all([
+        listAdminPolicies(),
+        listAdminTickets(),
+      ]);
+      setPolicies(policyResponse.items ?? []);
+      setTickets(ticketResponse.items ?? []);
       setStatus({
         type: "success",
-        message: `Policy issued successfully: ${response.policy_number}`,
+        message: "Policies and ticket queues loaded successfully.",
       });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }
 
-  const lookupPolicy = async () => {
+  async function handlePolicyLookup() {
+    if (!policyLookup) {
+      return;
+    }
+
     try {
       const response = await getPolicy(policyLookup);
-      setPolicyDetail(response);
-      setStatus({ type: "success", message: "Policy fetched successfully." });
+      setSelectedPolicy(response);
+      setStatus({ type: "success", message: "Policy loaded successfully." });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
     }
-  };
+  }
 
-  const attachPdf = async () => {
+  async function handleResolveTicket(event) {
+    event.preventDefault();
+    setStatus({ type: "", message: "" });
+
     try {
-      const response = await attachPolicyPdf(pdfAttachState.policyNumber, {
-        pdf_url: pdfAttachState.pdfUrl,
+      await respondToAdminTicket(resolutionForm.ticketId, {
+        ticket_status: resolutionForm.ticket_status,
+        admin_response: resolutionForm.admin_response,
       });
+      setResolutionForm({
+        ticketId: "",
+        ticket_status: "RESOLVED",
+        admin_response: "",
+      });
+      await loadOpsData();
       setStatus({
         type: "success",
-        message: `PDF attached for policy ${response.policy_number}.`,
+        message: "Ticket updated successfully.",
       });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
     }
-  };
+  }
 
   return (
     <div className="page-stack">
       <header className="page-header page-header-tight">
-        <p className="eyebrow-text">Policy issuance hub</p>
-        <h2>Issue policies, fetch policy records, and attach policy PDFs.</h2>
+        <p className="eyebrow-text">Admin policy and ticket center</p>
+        <h2>Investigate policy outcomes, review support tickets, and close customer issues.</h2>
+        <p className="page-copy">
+          This page covers the customer-app admin’s post-purchase responsibility:
+          inspect issued policies, check generated PDFs, review support tickets,
+          respond to customers, and move tickets to resolved or closed.
+        </p>
       </header>
 
       {status.message ? (
@@ -103,75 +120,175 @@ function AdminPolicyHubPage() {
         </div>
       ) : null}
 
+      <SectionCard
+        title="Policy and ticket queue"
+        subtitle="Refresh the latest post-purchase operations data for admin review."
+        actions={
+          <button
+            type="button"
+            className="primary-button"
+            onClick={loadOpsData}
+            disabled={isLoading}
+          >
+            {isLoading ? "Refreshing..." : "Refresh policy & ticket data"}
+          </button>
+        }
+      >
+        <div className="banner-grid">
+          <article className="hero-mini-card">
+            <strong>{policies.length}</strong>
+            <p>Policies currently visible to the admin operations team.</p>
+          </article>
+          <article className="hero-mini-card">
+            <strong>{tickets.length}</strong>
+            <p>Total support tickets loaded from the customer-side backend.</p>
+          </article>
+          <article className="hero-mini-card">
+            <strong>{activeTickets.length}</strong>
+            <p>Tickets still requiring admin action or final customer closure.</p>
+          </article>
+        </div>
+      </SectionCard>
+
       <div className="content-grid">
-        <SectionCard title="Issue policy" subtitle="Manual admin policy issuance flow.">
-          <form className="form-grid" onSubmit={submitPolicyIssue}>
-            <label className="field-label"><span>Transaction ID</span><input className="field-input" name="transaction_id" value={issueState.transaction_id} onChange={updateIssueField} /></label>
-            <label className="field-label"><span>User ID</span><input className="field-input" name="user_id" value={issueState.user_id} onChange={updateIssueField} /></label>
-            <label className="field-label"><span>Company name</span><input className="field-input" name="company_name" value={issueState.company_name} onChange={updateIssueField} /></label>
-            <label className="field-label"><span>Plan name</span><input className="field-input" name="plan_name" value={issueState.plan_name} onChange={updateIssueField} /></label>
-            <label className="field-label"><span>Coverage amount</span><input className="field-input" type="number" min="0" name="coverage_amount" value={issueState.coverage_amount} onChange={updateIssueField} /></label>
-            <label className="field-label"><span>Base premium</span><input className="field-input" type="number" min="0" name="base_premium" value={issueState.base_premium} onChange={updateIssueField} /></label>
-            <label className="field-label"><span>Add-on name</span><input className="field-input" name="add_on_name" value={issueState.add_on_name} onChange={updateIssueField} /></label>
-            <label className="field-label"><span>Add-on price</span><input className="field-input" type="number" min="0" name="add_on_price" value={issueState.add_on_price} onChange={updateIssueField} /></label>
-            <label className="field-label"><span>Add-on total</span><input className="field-input" type="number" min="0" name="add_on_total" value={issueState.add_on_total} onChange={updateIssueField} /></label>
-            <label className="field-label"><span>Tax amount</span><input className="field-input" type="number" min="0" name="tax_amount" value={issueState.tax_amount} onChange={updateIssueField} /></label>
-            <label className="field-label"><span>Total premium</span><input className="field-input" type="number" min="0" name="total_premium" value={issueState.total_premium} onChange={updateIssueField} /></label>
-            <label className="field-label"><span>Payment reference</span><input className="field-input" name="payment_reference" value={issueState.payment_reference} onChange={updateIssueField} /></label>
-            <label className="field-label"><span>PDF URL</span><input className="field-input" name="pdf_url" value={issueState.pdf_url} onChange={updateIssueField} /></label>
-            <label className="field-label"><span>Duration years</span><input className="field-input" type="number" min="1" name="duration_years" value={issueState.duration_years} onChange={updateIssueField} /></label>
-            <div className="form-actions form-span-full">
-              <button type="submit" className="primary-button">Issue policy</button>
-            </div>
-          </form>
+        <SectionCard title="Policy lookup" subtitle="Inspect one issued policy in detail.">
+          <div className="stacked-fields">
+            <input
+              className="field-input"
+              value={policyLookup}
+              onChange={(event) => setPolicyLookup(event.target.value)}
+              placeholder="Enter policy number"
+            />
+            <button type="button" className="secondary-button" onClick={handlePolicyLookup}>
+              Load policy
+            </button>
+            {selectedPolicy ? (
+              <div className="info-panel">
+                <p><strong>Plan:</strong> {selectedPolicy.plan_name}</p>
+                <p><strong>Company:</strong> {selectedPolicy.company_name}</p>
+                <p><strong>Status:</strong> {selectedPolicy.policy_status}</p>
+                <p><strong>Payment reference:</strong> {selectedPolicy.payment_reference || "-"}</p>
+                <p><strong>PDF URL:</strong> {selectedPolicy.pdf_url || "-"}</p>
+              </div>
+            ) : null}
+          </div>
         </SectionCard>
 
-        <SectionCard title="Policy tools" subtitle="Fetch one policy and attach a PDF URL.">
-          <div className="stacked-fields">
-            <input className="field-input" value={policyLookup} onChange={(event) => setPolicyLookup(event.target.value)} placeholder="Enter policy number" />
-            <button type="button" className="secondary-button" onClick={lookupPolicy}>Fetch policy</button>
-
+        <SectionCard title="Resolve customer ticket" subtitle="Update one ticket after investigating the issue.">
+          <form className="stacked-fields" onSubmit={handleResolveTicket}>
             <input
               className="field-input"
-              value={pdfAttachState.policyNumber}
+              value={resolutionForm.ticketId}
               onChange={(event) =>
-                setPdfAttachState((currentState) => ({
-                  ...currentState,
-                  policyNumber: event.target.value,
+                setResolutionForm((currentValue) => ({
+                  ...currentValue,
+                  ticketId: event.target.value,
                 }))
               }
-              placeholder="Policy number for PDF attach"
+              placeholder="Ticket ID"
+              required
             />
-            <input
+            <select
               className="field-input"
-              value={pdfAttachState.pdfUrl}
+              value={resolutionForm.ticket_status}
               onChange={(event) =>
-                setPdfAttachState((currentState) => ({
-                  ...currentState,
-                  pdfUrl: event.target.value,
+                setResolutionForm((currentValue) => ({
+                  ...currentValue,
+                  ticket_status: event.target.value,
                 }))
               }
-              placeholder="https://example.com/policy.pdf"
+            >
+              <option value="IN_PROGRESS">IN_PROGRESS</option>
+              <option value="RESOLVED">RESOLVED</option>
+              <option value="CLOSED">CLOSED</option>
+            </select>
+            <textarea
+              className="field-input field-textarea"
+              rows="4"
+              value={resolutionForm.admin_response}
+              onChange={(event) =>
+                setResolutionForm((currentValue) => ({
+                  ...currentValue,
+                  admin_response: event.target.value,
+                }))
+              }
+              placeholder="Write the admin response or resolution update."
+              required
             />
-            <button type="button" className="secondary-button" onClick={attachPdf}>
-              Attach PDF
+            <button type="submit" className="primary-button">
+              Update ticket
             </button>
-          </div>
+          </form>
         </SectionCard>
       </div>
 
-      {policyDetail ? (
-        <SectionCard title="Policy detail" subtitle="Latest fetched or issued policy snapshot.">
-          <div className="info-panel">
-            <p><strong>Policy number:</strong> {policyDetail.policy_number}</p>
-            <p><strong>Plan:</strong> {policyDetail.plan_name}</p>
-            <p><strong>Company:</strong> {policyDetail.company_name}</p>
-            <p><strong>Status:</strong> {policyDetail.policy_status}</p>
-            <p><strong>Total premium:</strong> Rs. {policyDetail.total_premium}</p>
-            <p><strong>PDF URL:</strong> {policyDetail.pdf_url || "-"}</p>
+      <SectionCard title="Open tickets first" subtitle="Prioritize unresolved or active customer issues.">
+        {activeTickets.length === 0 ? (
+          <EmptyState
+            title="No active tickets loaded"
+            description="Once support tickets are refreshed, active items that need admin handling will appear here."
+          />
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Ticket</th>
+                  <th>Transaction</th>
+                  <th>Status</th>
+                  <th>Issue type</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeTickets.map((ticket) => (
+                  <tr key={ticket.ticket_id}>
+                    <td>{ticket.ticket_id}</td>
+                    <td>{ticket.transaction_id}</td>
+                    <td>{ticket.ticket_status}</td>
+                    <td>{ticket.issue_type}</td>
+                    <td>{formatDateTime(ticket.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </SectionCard>
-      ) : null}
+        )}
+      </SectionCard>
+
+      <SectionCard title="Issued policy register" subtitle="Latest policy records available for customer-side operations.">
+        {policies.length === 0 ? (
+          <EmptyState
+            title="No policies loaded"
+            description="Refresh the policy queue to view the latest issued policy records."
+          />
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Policy</th>
+                  <th>Plan</th>
+                  <th>Company</th>
+                  <th>Status</th>
+                  <th>PDF</th>
+                </tr>
+              </thead>
+              <tbody>
+                {policies.slice(0, 12).map((policy) => (
+                  <tr key={policy.policy_number}>
+                    <td>{policy.policy_number}</td>
+                    <td>{policy.plan_name}</td>
+                    <td>{policy.company_name}</td>
+                    <td>{policy.policy_status}</td>
+                    <td>{policy.pdf_url ? "Available" : "Pending"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
     </div>
   );
 }
