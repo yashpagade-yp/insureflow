@@ -8,9 +8,7 @@ import { useSession } from "../context/SessionContext";
 import {
   createTicket,
   getLatestIncompleteJourney,
-  getPaymentStatus,
   getPolicy,
-  getTransaction,
   listUserPolicies,
   listUserTickets,
   listUserTransactions,
@@ -39,14 +37,9 @@ function CustomerDashboardPage() {
   const [transactions, setTransactions] = useState([]);
   const [policies, setPolicies] = useState([]);
   const [tickets, setTickets] = useState([]);
-  const [transactionLookup, setTransactionLookup] = useState("");
   const [policyLookup, setPolicyLookup] = useState("");
-  const [paymentLookup, setPaymentLookup] = useState("");
-  const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [selectedPolicy, setSelectedPolicy] = useState(null);
-  const [paymentStatus, setPaymentStatus] = useState(null);
   const [ticketForm, setTicketForm] = useState({
-    transaction_id: "",
     issue_type: "",
     description: "",
   });
@@ -63,6 +56,15 @@ function CustomerDashboardPage() {
     [tickets]
   );
 
+  const latestSupportTransactionId = useMemo(
+    () =>
+      resumeJourney?.transaction_id ||
+      policies[0]?.transaction_id ||
+      transactions[0]?.transaction_id ||
+      "",
+    [policies, resumeJourney, transactions]
+  );
+
   async function refreshCustomerData() {
     setIsRefreshing(true);
     setStatus({ type: "", message: "" });
@@ -77,11 +79,7 @@ function CustomerDashboardPage() {
 
       const [resumeResult, transactionsResult, policiesResult, ticketsResult] = results;
 
-      if (resumeResult.status === "fulfilled") {
-        setResumeJourney(resumeResult.value);
-      } else {
-        setResumeJourney(null);
-      }
+      setResumeJourney(resumeResult.status === "fulfilled" ? resumeResult.value : null);
 
       if (transactionsResult.status === "fulfilled") {
         setTransactions(transactionsResult.value.items ?? []);
@@ -106,20 +104,6 @@ function CustomerDashboardPage() {
     }
   }
 
-  async function handleTransactionLookup() {
-    if (!transactionLookup) {
-      return;
-    }
-
-    try {
-      const response = await getTransaction(transactionLookup);
-      setSelectedTransaction(response);
-      setStatus({ type: "success", message: "Transaction loaded." });
-    } catch (error) {
-      setStatus({ type: "error", message: error.message });
-    }
-  }
-
   async function handlePolicyLookup() {
     if (!policyLookup) {
       return;
@@ -134,28 +118,22 @@ function CustomerDashboardPage() {
     }
   }
 
-  async function handlePaymentLookup() {
-    if (!paymentLookup) {
-      return;
-    }
-
-    try {
-      const response = await getPaymentStatus(paymentLookup);
-      setPaymentStatus(response);
-      setStatus({ type: "success", message: "Payment status loaded." });
-    } catch (error) {
-      setStatus({ type: "error", message: error.message });
-    }
-  }
-
   async function handleCreateTicket(event) {
     event.preventDefault();
     setIsTicketSubmitting(true);
     setStatus({ type: "", message: "" });
 
     try {
-      await createTicket(session.userId, ticketForm);
-      setTicketForm({ transaction_id: "", issue_type: "", description: "" });
+      if (!latestSupportTransactionId) {
+        throw new Error("No active or recent policy journey is available for ticket creation right now.");
+      }
+
+      await createTicket(session.userId, {
+        transaction_id: latestSupportTransactionId,
+        issue_type: ticketForm.issue_type,
+        description: ticketForm.description,
+      });
+      setTicketForm({ issue_type: "", description: "" });
       await refreshCustomerData();
       setStatus({
         type: "success",
@@ -190,35 +168,29 @@ function CustomerDashboardPage() {
   return (
     <div className="page-stack">
       <header className="page-header page-header-tight">
-        <p className="eyebrow-text">Returning customer workspace</p>
-        <h2>Resume your insurance journey, track your records, and raise support issues.</h2>
+        <p className="eyebrow-text">My insurance account</p>
+        <h2>Resume your journey, access issued policies, and get support when you need it.</h2>
         <p className="page-copy">
-          This space follows the exact customer return flow from the role document:
-          resume the latest journey, inspect transactions, access issued policies,
-          download PDFs, and raise a ticket if something went wrong after payment.
+          This customer dashboard is focused only on your active insurance journey,
+          completed policy purchases, and support needs.
         </p>
       </header>
 
       <div className="stats-grid">
         <StatCard
-          label="Latest journey step"
-          value={resumeJourney?.form_step || "-"}
-          helper="Saved progress for the latest incomplete journey"
-        />
-        <StatCard
-          label="Transactions"
-          value={transactions.length}
-          helper="All customer journey records linked to this mobile number"
+          label="Incomplete journey"
+          value={resumeJourney ? "Available" : "None"}
+          helper="Resume your purchase from the latest saved step"
         />
         <StatCard
           label="Issued policies"
           value={policies.length}
-          helper="Policies created after successful payment verification"
+          helper="Policies created after successful payment"
         />
         <StatCard
           label="Open tickets"
           value={openTickets.length}
-          helper="Support issues still waiting for resolution or closure"
+          helper="Support requests still waiting for resolution"
         />
       </div>
 
@@ -229,8 +201,8 @@ function CustomerDashboardPage() {
       ) : null}
 
       <SectionCard
-        title="Journey control center"
-        subtitle="Refresh your saved progress, transaction history, policy records, and ticket state in one action."
+        title="My account overview"
+        subtitle="Refresh your latest purchase progress, policy records, and ticket status in one action."
         actions={
           <button
             type="button"
@@ -238,20 +210,17 @@ function CustomerDashboardPage() {
             onClick={refreshCustomerData}
             disabled={isRefreshing}
           >
-            {isRefreshing ? "Refreshing..." : "Refresh account data"}
+            {isRefreshing ? "Refreshing..." : "Refresh account"}
           </button>
         }
       >
         {resumeJourney ? (
           <div className="highlight-strip">
             <div>
-              <strong>Latest incomplete transaction:</strong> {resumeJourney.transaction_id}
-            </div>
-            <div>
-              <strong>Current step:</strong> {resumeJourney.form_step}
-            </div>
-            <div>
-              <strong>Status:</strong> {resumeJourney.current_status}
+              <strong>Resume journey</strong>
+              <p className="muted-copy">
+                Continue from your latest saved step: {resumeJourney.form_step || "Saved progress"}
+              </p>
             </div>
             <Link
               to="/customer/app/quotes"
@@ -262,73 +231,32 @@ function CustomerDashboardPage() {
               }}
               className="secondary-button"
             >
-              Resume purchase flow
+              Resume policy journey
             </Link>
           </div>
         ) : (
           <EmptyState
-            title="No incomplete journey right now"
-            description="If a purchase is already complete, you can still use the tools below to inspect transactions, payments, policies, and tickets."
+            title="No incomplete journey"
+            description="You do not have a saved unfinished purchase right now. You can still view issued policies and raise support tickets below."
           />
         )}
       </SectionCard>
 
       <div className="content-grid">
-        <SectionCard title="Transaction lookup" subtitle="Check one journey by transaction ID.">
+        <SectionCard title="Issued policies" subtitle="Policies that are already purchased and available in your account.">
           <div className="stacked-fields">
-            <input
-              className="field-input"
-              value={transactionLookup}
-              onChange={(event) => setTransactionLookup(event.target.value)}
-              placeholder="Enter transaction ID"
-            />
-            <button type="button" className="secondary-button" onClick={handleTransactionLookup}>
-              Load transaction
-            </button>
-            {selectedTransaction ? (
-              <div className="info-panel">
-                <p><strong>Status:</strong> {selectedTransaction.current_status}</p>
-                <p><strong>Selected plan ID:</strong> {selectedTransaction.selected_plan_id || "-"}</p>
-                <p><strong>Last active:</strong> {formatDateTime(selectedTransaction.last_active_at)}</p>
-              </div>
-            ) : null}
-          </div>
-        </SectionCard>
+            <div className="inline-form">
+              <input
+                className="field-input"
+                value={policyLookup}
+                onChange={(event) => setPolicyLookup(event.target.value)}
+                placeholder="Enter policy number to find one policy"
+              />
+              <button type="button" className="secondary-button" onClick={handlePolicyLookup}>
+                Find policy
+              </button>
+            </div>
 
-        <SectionCard title="Payment lookup" subtitle="Check payment status with the payment reference.">
-          <div className="stacked-fields">
-            <input
-              className="field-input"
-              value={paymentLookup}
-              onChange={(event) => setPaymentLookup(event.target.value)}
-              placeholder="Enter payment reference"
-            />
-            <button type="button" className="secondary-button" onClick={handlePaymentLookup}>
-              Load payment status
-            </button>
-            {paymentStatus ? (
-              <div className="info-panel">
-                <p><strong>Status:</strong> {paymentStatus.payment_status}</p>
-                <p><strong>Amount:</strong> {formatCurrency(paymentStatus.amount)}</p>
-                <p><strong>Updated at:</strong> {formatDateTime(paymentStatus.updated_at)}</p>
-              </div>
-            ) : null}
-          </div>
-        </SectionCard>
-      </div>
-
-      <div className="content-grid">
-        <SectionCard title="Policy lookup" subtitle="Fetch one policy and open its PDF if available.">
-          <div className="stacked-fields">
-            <input
-              className="field-input"
-              value={policyLookup}
-              onChange={(event) => setPolicyLookup(event.target.value)}
-              placeholder="Enter policy number"
-            />
-            <button type="button" className="secondary-button" onClick={handlePolicyLookup}>
-              Load policy
-            </button>
             {selectedPolicy ? (
               <div className="info-panel">
                 <p><strong>Plan:</strong> {selectedPolicy.plan_name}</p>
@@ -349,23 +277,41 @@ function CustomerDashboardPage() {
                 )}
               </div>
             ) : null}
+
+            {policies.length === 0 ? (
+              <EmptyState
+                title="No issued policies yet"
+                description="Once your payment is verified and policy issuance is complete, your purchased policy will appear here."
+              />
+            ) : (
+              <div className="card-grid">
+                {policies.map((policy) => (
+                  <article key={policy.policy_number} className="mini-card">
+                    <p className="eyebrow-text">{policy.company_name}</p>
+                    <h4>{policy.plan_name}</h4>
+                    <p><strong>Policy:</strong> {policy.policy_number}</p>
+                    <p><strong>Status:</strong> {policy.policy_status}</p>
+                    <p><strong>Total:</strong> {formatCurrency(policy.total_premium)}</p>
+                    <p><strong>Issued:</strong> {formatDateTime(policy.issued_at)}</p>
+                    {policy.pdf_url ? (
+                      <a
+                        className="text-link"
+                        href={`${import.meta.env.VITE_MAIN_API_BASE_URL ?? "http://127.0.0.1:8000"}${policy.pdf_url}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View policy PDF →
+                      </a>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            )}
           </div>
         </SectionCard>
 
-        <SectionCard title="Raise a support ticket" subtitle="Use this when payment succeeded but the journey result looks wrong.">
+        <SectionCard title="Raise a support ticket" subtitle="Tell us the issue type and describe what went wrong.">
           <form className="stacked-fields" onSubmit={handleCreateTicket}>
-            <input
-              className="field-input"
-              value={ticketForm.transaction_id}
-              onChange={(event) =>
-                setTicketForm((currentValue) => ({
-                  ...currentValue,
-                  transaction_id: event.target.value,
-                }))
-              }
-              placeholder="Transaction ID linked to the issue"
-              required
-            />
             <input
               className="field-input"
               value={ticketForm.issue_type}
@@ -375,7 +321,7 @@ function CustomerDashboardPage() {
                   issue_type: event.target.value,
                 }))
               }
-              placeholder="Issue type, e.g. payment_issue"
+              placeholder="Issue type, for example: payment_issue"
               required
             />
             <textarea
@@ -388,7 +334,7 @@ function CustomerDashboardPage() {
                   description: event.target.value,
                 }))
               }
-              placeholder="Describe the issue clearly so the admin can investigate quickly."
+              placeholder="Describe the issue clearly so support can investigate it quickly."
               required
             />
             <button type="submit" className="primary-button" disabled={isTicketSubmitting}>
@@ -398,7 +344,7 @@ function CustomerDashboardPage() {
         </SectionCard>
       </div>
 
-      <SectionCard title="My tickets" subtitle="Update open tickets and watch for admin responses.">
+      <SectionCard title="My tickets" subtitle="Track existing tickets and add more details to an open request if needed.">
         {tickets.length === 0 ? (
           <EmptyState
             title="No tickets raised yet"
@@ -410,7 +356,6 @@ function CustomerDashboardPage() {
               <thead>
                 <tr>
                   <th>Ticket</th>
-                  <th>Transaction</th>
                   <th>Status</th>
                   <th>Issue</th>
                   <th>Admin response</th>
@@ -420,7 +365,6 @@ function CustomerDashboardPage() {
                 {tickets.map((ticket) => (
                   <tr key={ticket.ticket_id}>
                     <td>{ticket.ticket_id}</td>
-                    <td>{ticket.transaction_id}</td>
                     <td>{ticket.ticket_status}</td>
                     <td>{ticket.issue_type}</td>
                     <td>{ticket.admin_response || "-"}</td>
@@ -452,75 +396,12 @@ function CustomerDashboardPage() {
                 description: event.target.value,
               }))
             }
-            placeholder="Add more context to your existing open ticket"
+            placeholder="Add more context to an open ticket"
           />
           <button type="submit" className="secondary-button">
-            Update open ticket
+            Update ticket
           </button>
         </form>
-      </SectionCard>
-
-      <SectionCard title="Transaction history" subtitle="All journeys linked to this customer account.">
-        {transactions.length === 0 ? (
-          <EmptyState
-            title="No transactions loaded"
-            description="Use the refresh button above to load your transaction history from the backend."
-          />
-        ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Transaction</th>
-                  <th>Status</th>
-                  <th>Selected plan</th>
-                  <th>Last active</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((transaction) => (
-                  <tr key={transaction.transaction_id}>
-                    <td>{transaction.transaction_id}</td>
-                    <td>{transaction.current_status}</td>
-                    <td>{transaction.selected_plan_id || "-"}</td>
-                    <td>{formatDateTime(transaction.last_active_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </SectionCard>
-
-      <SectionCard title="Issued policies" subtitle="Every policy issued for this customer account.">
-        {policies.length === 0 ? (
-          <EmptyState
-            title="No issued policies loaded"
-            description="Once payment is verified and policy issuance completes, your policy will appear here."
-          />
-        ) : (
-          <div className="card-grid">
-            {policies.map((policy) => (
-              <article key={policy.policy_number} className="mini-card">
-                <p className="eyebrow-text">{policy.company_name}</p>
-                <h4>{policy.plan_name}</h4>
-                <p><strong>Policy:</strong> {policy.policy_number}</p>
-                <p><strong>Status:</strong> {policy.policy_status}</p>
-                <p><strong>Total:</strong> {formatCurrency(policy.total_premium)}</p>
-                {policy.pdf_url ? (
-                  <a
-                    className="text-link"
-                    href={`${import.meta.env.VITE_MAIN_API_BASE_URL ?? "http://127.0.0.1:8000"}${policy.pdf_url}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View PDF →
-                  </a>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        )}
       </SectionCard>
     </div>
   );

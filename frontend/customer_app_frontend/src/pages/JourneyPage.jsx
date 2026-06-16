@@ -49,6 +49,8 @@ function JourneyPage() {
     try {
       const response = await createJourney({
         ...formState,
+        form_step: "completed",
+        is_form_completed: true,
         sum_insured_requested: Number(formState.sum_insured_requested || 0),
         policy_term_years: Number(formState.policy_term_years || 0),
         annual_income: Number(formState.annual_income || 0),
@@ -60,7 +62,7 @@ function JourneyPage() {
 
       setStatus({
         type: "success",
-        message: `Journey created. Transaction ID: ${response.transaction_id}`,
+        message: "Application submitted successfully. Preparing your matching plans.",
       });
       storeJourneyDraft({
         transactionId: response.transaction_id,

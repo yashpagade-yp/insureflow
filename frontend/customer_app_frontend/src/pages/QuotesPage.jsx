@@ -155,6 +155,25 @@ function QuotesPage() {
 
       setSelectedPlanId(nextSelectedPlanId);
     } catch (error) {
+      if (error.message?.includes("Quote not found")) {
+        removeStoredJourneyDraft();
+        setQuoteData(null);
+        setJourneyMeta((currentValue) => ({
+          ...currentValue,
+          transactionId: "",
+          userId: session?.userId || "",
+          mobileNumber: session?.mobileNumber || "",
+          proposerName: "",
+          insuranceType: "health",
+          sumInsuredRequested: 0,
+        }));
+        setStatus({
+          type: "error",
+          message: "This old journey is no longer available. Please start a fresh application or resume your latest saved policy journey.",
+        });
+        return;
+      }
+
       setStatus({ type: "error", message: error.message });
     } finally {
       setIsLoading(false);
@@ -220,7 +239,10 @@ function QuotesPage() {
       await selectAddOns({
         transaction_id: journeyMeta.transactionId,
         selected_plan_id: selectedPlanId,
-        selected_add_ons: selectedAddOns,
+        selected_add_ons: selectedAddOns.map((item) => ({
+          name: item.name,
+          price: item.price,
+        })),
       });
       setCurrentStep(2);
       setStatus({

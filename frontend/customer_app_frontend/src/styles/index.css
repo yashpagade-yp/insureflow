@@ -279,6 +279,89 @@ textarea {
   gap: 1rem;
 }
 
+.landing-layout {
+  gap: 1rem;
+}
+
+.landing-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 1rem;
+  background:
+    linear-gradient(135deg, rgba(255, 250, 241, 0.88), rgba(235, 247, 244, 0.8)),
+    radial-gradient(circle at top right, rgba(13, 138, 170, 0.12), transparent 34%);
+}
+
+.landing-hero-copy,
+.landing-hero-panel,
+.landing-mini-grid,
+.landing-role-grid,
+.landing-action-stack,
+.landing-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.landing-hero-panel {
+  align-content: start;
+}
+
+.landing-hero h1 {
+  max-width: 12ch;
+}
+
+.landing-quote-card {
+  padding: 1.2rem;
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.landing-quote-card h2,
+.landing-role-card h2 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+}
+
+.landing-quote-card p:last-child {
+  margin-bottom: 0;
+}
+
+.landing-mini-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.landing-role-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.landing-role-card {
+  padding: 1.5rem;
+}
+
+.landing-role-card-admin {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(232, 244, 249, 0.78)),
+    radial-gradient(circle at top right, rgba(13, 138, 170, 0.12), transparent 38%);
+}
+
+.landing-list-item {
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.landing-inline-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+
 .choice-card {
   padding: 1.35rem;
 }
@@ -1099,7 +1182,9 @@ textarea {
   .customer-plan-grid,
   .journey-overview-card,
   .payment-layout,
-  .portal-layout {
+  .portal-layout,
+  .landing-hero,
+  .landing-role-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1143,7 +1228,8 @@ textarea {
   .form-grid,
   .journey-stepbar,
   .customer-plan-metrics,
-  .chat-input-bar {
+  .chat-input-bar,
+  .landing-mini-grid {
     grid-template-columns: 1fr;
   }
 
