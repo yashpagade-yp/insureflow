@@ -44,6 +44,10 @@ class ProviderUserCrud:
         """Return one provider-admin user by ODMantic object id."""
         try:
             logging.info("Executing ProviderUserCrud.get_by_id function")
+            if isinstance(provider_user_id, str):
+                if len(provider_user_id) != 24:
+                    return None
+                provider_user_id = ObjectId(provider_user_id)
             return await self.engine.find_one(
                 ProviderUserModel,
                 ProviderUserModel.id == provider_user_id,

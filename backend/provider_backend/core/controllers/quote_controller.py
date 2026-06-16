@@ -42,9 +42,29 @@ class QuoteController:
         self.quote_crud = QuoteCrud()
 
     async def generate_quotes(self, payload: QuoteGenerationRequest) -> QuoteResponse:
-        """Generate or replace the provider quote document for one transaction."""
+        """Generate or replace the provider quote document for one transaction.
+
+        Args:
+            payload: Quote-generation payload received from the main backend.
+
+        Returns:
+            QuoteResponse: Provider quote document after generation or
+                replacement.
+
+        Raises:
+            HTTPException: If required quote identifiers are invalid or quotes
+                cannot be generated.
+        """
         try:
             logging.info("Executing QuoteController.generate_quotes function")
+            normalized_transaction_id = payload.transaction_id.strip()
+            if not normalized_transaction_id:
+                logging.warning("Empty transaction_id provided for quote generation")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Transaction id is required.",
+                )
+
             insurance_type = InsuranceType(payload.insurance_type)
             plans = await self.plan_crud.list_by_insurance_type(insurance_type)
             if not plans:
@@ -86,12 +106,14 @@ class QuoteController:
                     )
                 )
 
-            quote = await self.quote_crud.get_by_transaction_id(payload.transaction_id)
+            quote = await self.quote_crud.get_by_transaction_id(
+                normalized_transaction_id
+            )
             if quote is None:
                 quote = await self.quote_crud.create(
                     QuoteModel.model_validate(
                         {
-                            "transaction_id": payload.transaction_id,
+                            "transaction_id": normalized_transaction_id,
                             "items": items,
                         }
                     )
@@ -101,7 +123,7 @@ class QuoteController:
 
             logging.info(
                 "Quotes generated successfully for transaction %s",
-                payload.transaction_id,
+                normalized_transaction_id,
             )
             return self._build_quote_response(quote)
         except HTTPException as httperror:
@@ -117,25 +139,62 @@ class QuoteController:
             )
 
     async def select_plan(self, transaction_id: str, selected_plan_id: str) -> QuoteResponse:
-        """Mark one plan as selected inside the provider quote document."""
+        """Mark one plan as selected inside the provider quote document.
+
+        Args:
+            transaction_id: Related transaction identifier from the main backend.
+            selected_plan_id: Provider plan identifier chosen by the customer.
+
+        Returns:
+            QuoteResponse: Updated provider quote response after plan selection.
+
+        Raises:
+            HTTPException: If identifiers are invalid or the quote/plan cannot
+                be found.
+        """
         try:
             logging.info("Executing QuoteController.select_plan function")
-            quote = await self.quote_crud.get_by_transaction_id(transaction_id)
+            normalized_transaction_id = transaction_id.strip()
+            normalized_selected_plan_id = selected_plan_id.strip()
+            if not normalized_transaction_id or not normalized_selected_plan_id:
+                logging.warning("Quote plan selection received empty identifiers")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Transaction id and selected plan id are required.",
+                )
+
+            quote = await self.quote_crud.get_by_transaction_id(normalized_transaction_id)
             if quote is None:
                 logging.warning(
                     "Quote not found for transaction %s during plan selection",
-                    transaction_id,
+                    normalized_transaction_id,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Quote not found for this transaction.",
                 )
 
-            quote = await self.quote_crud.set_selected_plan_id(quote, selected_plan_id)
+            if not any(
+                item.plan_id == normalized_selected_plan_id for item in quote.items
+            ):
+                logging.warning(
+                    "Selected plan %s not found in quote items for transaction %s",
+                    normalized_selected_plan_id,
+                    normalized_transaction_id,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Selected plan not found in quote items.",
+                )
+
+            quote = await self.quote_crud.set_selected_plan_id(
+                quote,
+                normalized_selected_plan_id,
+            )
             for item in quote.items:
                 item.quote_status = (
                     QuoteStatus.SELECTED
-                    if item.plan_id == selected_plan_id
+                    if item.plan_id == normalized_selected_plan_id
                     else QuoteStatus.GENERATED
                 )
 
@@ -143,8 +202,8 @@ class QuoteController:
             quote = await self.quote_crud.save(quote)
             logging.info(
                 "Plan %s selected successfully for transaction %s",
-                selected_plan_id,
-                transaction_id,
+                normalized_selected_plan_id,
+                normalized_transaction_id,
             )
             return self._build_quote_response(quote)
         except HTTPException as httperror:
@@ -165,14 +224,37 @@ class QuoteController:
         selected_plan_id: str,
         selected_add_ons: list[dict[str, Any]],
     ) -> QuoteResponse:
-        """Save selected add-ons and recompute totals for the chosen quote item."""
+        """Save selected add-ons and recompute totals for the chosen quote item.
+
+        Args:
+            transaction_id: Related transaction identifier from the main backend.
+            selected_plan_id: Provider plan identifier chosen by the customer.
+            selected_add_ons: Selected add-ons to validate and persist.
+
+        Returns:
+            QuoteResponse: Updated provider quote response with recalculated
+                totals.
+
+        Raises:
+            HTTPException: If identifiers are invalid or the quote/selected plan
+                cannot be found.
+        """
         try:
             logging.info("Executing QuoteController.save_selected_add_ons function")
-            quote = await self.quote_crud.get_by_transaction_id(transaction_id)
+            normalized_transaction_id = transaction_id.strip()
+            normalized_selected_plan_id = selected_plan_id.strip()
+            if not normalized_transaction_id or not normalized_selected_plan_id:
+                logging.warning("Quote add-on selection received empty identifiers")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Transaction id and selected plan id are required.",
+                )
+
+            quote = await self.quote_crud.get_by_transaction_id(normalized_transaction_id)
             if quote is None:
                 logging.warning(
                     "Quote not found for transaction %s during add-on selection",
-                    transaction_id,
+                    normalized_transaction_id,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -180,14 +262,18 @@ class QuoteController:
                 )
 
             target_item = next(
-                (item for item in quote.items if item.plan_id == selected_plan_id),
+                (
+                    item
+                    for item in quote.items
+                    if item.plan_id == normalized_selected_plan_id
+                ),
                 None,
             )
             if target_item is None:
                 logging.warning(
                     "Selected plan %s not found in quote items for transaction %s",
-                    selected_plan_id,
-                    transaction_id,
+                    normalized_selected_plan_id,
+                    normalized_transaction_id,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -205,7 +291,7 @@ class QuoteController:
 
             quote = await self.quote_crud.set_selected_add_ons(
                 quote=quote,
-                plan_id=selected_plan_id,
+                plan_id=normalized_selected_plan_id,
                 selected_add_ons=selected_add_on_models,
                 add_on_total=add_on_total,
                 tax_amount=tax_amount,
@@ -213,13 +299,13 @@ class QuoteController:
             )
             quote = await self.quote_crud.update_item_status(
                 quote,
-                selected_plan_id,
+                normalized_selected_plan_id,
                 QuoteStatus.CONFIRMED,
             )
             logging.info(
                 "Add-ons saved successfully for plan %s and transaction %s",
-                selected_plan_id,
-                transaction_id,
+                normalized_selected_plan_id,
+                normalized_transaction_id,
             )
             return self._build_quote_response(quote)
         except HTTPException as httperror:
@@ -238,13 +324,33 @@ class QuoteController:
             )
 
     async def get_quote(self, transaction_id: str) -> QuoteResponse:
-        """Return one provider quote document by transaction id."""
+        """Return one provider quote document by transaction id.
+
+        Args:
+            transaction_id: Related transaction identifier from the main backend.
+
+        Returns:
+            QuoteResponse: Serialized provider quote response.
+
+        Raises:
+            HTTPException: If the transaction identifier is invalid or the quote
+                cannot be found.
+        """
         try:
             logging.info("Executing QuoteController.get_quote function")
-            quote = await self.quote_crud.get_by_transaction_id(transaction_id)
+            normalized_transaction_id = transaction_id.strip()
+            if not normalized_transaction_id:
+                logging.warning("Empty transaction_id provided for quote lookup")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Transaction id is required.",
+                )
+
+            quote = await self.quote_crud.get_by_transaction_id(normalized_transaction_id)
             if quote is None:
                 logging.warning(
-                    "Quote not found for transaction %s", transaction_id
+                    "Quote not found for transaction %s",
+                    normalized_transaction_id,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,

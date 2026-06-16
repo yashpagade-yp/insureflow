@@ -98,7 +98,7 @@ class PolicyCrud:
         try:
             logging.info("Executing PolicyCrud.update_pdf_url function")
             policy.pdf_url = pdf_url
-            policy.issued_at = datetime.now(timezone.utc)
+            policy.updated_at = datetime.now(timezone.utc)
             await self.engine.save(policy)
             return policy
         except Exception as error:

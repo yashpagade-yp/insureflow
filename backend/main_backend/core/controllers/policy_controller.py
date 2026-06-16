@@ -47,13 +47,57 @@ class PolicyController:
         pdf_url: str | None = None,
         duration_years: int = 1,
     ) -> PolicyResponse:
-        """Create a policy after successful payment and mark the transaction complete."""
+        """Create a policy after successful payment and mark the transaction complete.
+
+        Args:
+            transaction_id: Transaction identifier linked to the purchase.
+            user_id: User identifier who owns the issued policy.
+            company_name: Issuing insurance company name.
+            plan_name: Selected insurance plan name.
+            coverage_amount: Coverage amount stored on the issued policy.
+            base_premium: Base premium before add-ons and tax.
+            add_ons: Selected add-ons to snapshot onto the policy.
+            add_on_total: Total price contributed by selected add-ons.
+            tax_amount: Tax amount applied to the premium.
+            total_premium: Final total premium paid.
+            payment_reference: Linked payment reference.
+            pdf_url: Optional generated PDF URL to store immediately.
+            duration_years: Policy term duration in years.
+
+        Returns:
+            PolicyResponse: Serialized issued policy response.
+
+        Raises:
+            HTTPException: If required identifiers are invalid, a policy already
+                exists, or policy issuance fails.
+        """
         try:
             logging.info("Executing PolicyController.issue_policy function")
-            existing_policy = await self.policy_crud.get_by_transaction_id(transaction_id)
+            normalized_transaction_id = transaction_id.strip()
+            normalized_user_id = user_id.strip()
+            normalized_company_name = company_name.strip()
+            normalized_plan_name = plan_name.strip()
+            normalized_payment_reference = payment_reference.strip()
+            if (
+                not normalized_transaction_id
+                or not normalized_user_id
+                or not normalized_company_name
+                or not normalized_plan_name
+                or not normalized_payment_reference
+            ):
+                logging.warning("Policy issuance received empty required values")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Transaction, user, company, plan, and payment reference are required.",
+                )
+
+            existing_policy = await self.policy_crud.get_by_transaction_id(
+                normalized_transaction_id
+            )
             if existing_policy is not None:
                 logging.warning(
-                    "Policy already exists for transaction %s", transaction_id
+                    "Policy already exists for transaction %s",
+                    normalized_transaction_id,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -71,10 +115,10 @@ class PolicyController:
             policy = await self.policy_crud.create(
                 PolicyModel.model_validate(
                     {
-                        "transaction_id": transaction_id,
-                        "user_id": user_id,
-                        "company_name": company_name,
-                        "plan_name": plan_name,
+                        "transaction_id": normalized_transaction_id,
+                        "user_id": normalized_user_id,
+                        "company_name": normalized_company_name,
+                        "plan_name": normalized_plan_name,
                         "coverage_amount": coverage_amount,
                         "base_premium": base_premium,
                         "add_ons": policy_add_ons,
@@ -83,20 +127,25 @@ class PolicyController:
                         "total_premium": total_premium,
                         "start_date": start_date,
                         "end_date": end_date,
-                        "payment_reference": payment_reference,
+                        "payment_reference": normalized_payment_reference,
                         "pdf_url": pdf_url,
                     }
                 )
             )
 
-            transaction = await self.transaction_crud.get_by_transaction_id(transaction_id)
+            transaction = await self.transaction_crud.get_by_transaction_id(
+                normalized_transaction_id
+            )
             if transaction is not None:
                 await self.transaction_crud.update_status(
                     transaction,
                     TransactionStatus.PURCHASED,
                 )
 
-            logging.info("Policy issued successfully for transaction %s", transaction_id)
+            logging.info(
+                "Policy issued successfully for transaction %s",
+                normalized_transaction_id,
+            )
             return self._build_policy_response(policy)
         except HTTPException as httperror:
             logging.error(
@@ -115,18 +164,42 @@ class PolicyController:
         policy_number: str,
         pdf_url: str,
     ) -> PolicyPdfResponse:
-        """Attach a generated PDF URL to an issued policy."""
+        """Attach a generated PDF URL to an issued policy.
+
+        Args:
+            policy_number: Business-facing policy number to update.
+            pdf_url: Generated policy PDF URL to store.
+
+        Returns:
+            PolicyPdfResponse: Updated policy PDF metadata response.
+
+        Raises:
+            HTTPException: If the policy number or PDF URL is invalid, or the
+                policy cannot be updated.
+        """
         try:
             logging.info("Executing PolicyController.attach_policy_pdf function")
-            policy = await self.policy_crud.get_by_policy_number(policy_number)
+            normalized_policy_number = policy_number.strip()
+            normalized_pdf_url = pdf_url.strip()
+            if not normalized_policy_number or not normalized_pdf_url:
+                logging.warning("Policy PDF attachment received empty values")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Policy number and PDF URL are required.",
+                )
+
+            policy = await self.policy_crud.get_by_policy_number(normalized_policy_number)
             if policy is None:
-                logging.warning("Policy not found for policy number %s", policy_number)
+                logging.warning(
+                    "Policy not found for policy number %s",
+                    normalized_policy_number,
+                )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Policy not found.",
                 )
 
-            policy = await self.policy_crud.update_pdf_url(policy, pdf_url)
+            policy = await self.policy_crud.update_pdf_url(policy, normalized_pdf_url)
             return PolicyPdfResponse(
                 policy_number=policy.policy_number,
                 pdf_url=policy.pdf_url,
@@ -147,12 +220,34 @@ class PolicyController:
             )
 
     async def get_policy(self, policy_number: str) -> PolicyResponse:
-        """Return one issued policy by business policy number."""
+        """Return one issued policy by business policy number.
+
+        Args:
+            policy_number: Business-facing policy number to fetch.
+
+        Returns:
+            PolicyResponse: Serialized issued policy response.
+
+        Raises:
+            HTTPException: If the policy number is invalid or the policy cannot
+                be found.
+        """
         try:
             logging.info("Executing PolicyController.get_policy function")
-            policy = await self.policy_crud.get_by_policy_number(policy_number)
+            normalized_policy_number = policy_number.strip()
+            if not normalized_policy_number:
+                logging.warning("Empty policy_number provided for lookup")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Policy number is required.",
+                )
+
+            policy = await self.policy_crud.get_by_policy_number(normalized_policy_number)
             if policy is None:
-                logging.warning("Policy not found for policy number %s", policy_number)
+                logging.warning(
+                    "Policy not found for policy number %s",
+                    normalized_policy_number,
+                )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Policy not found.",
@@ -171,10 +266,29 @@ class PolicyController:
             )
 
     async def list_user_policies(self, user_id: str) -> PolicyListResponse:
-        """Return all policies for one user."""
+        """Return all policies for one user.
+
+        Args:
+            user_id: User identifier whose policies should be listed.
+
+        Returns:
+            PolicyListResponse: Ordered list of issued policies for the user.
+
+        Raises:
+            HTTPException: If the user identifier is invalid or the policies
+                cannot be listed.
+        """
         try:
             logging.info("Executing PolicyController.list_user_policies function")
-            policies = await self.policy_crud.list_by_user_id(user_id)
+            normalized_user_id = user_id.strip()
+            if not normalized_user_id:
+                logging.warning("Empty user_id provided for policy listing")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="User id is required.",
+                )
+
+            policies = await self.policy_crud.list_by_user_id(normalized_user_id)
             return PolicyListResponse(
                 items=[self._build_policy_response(item) for item in policies],
                 total_count=len(policies),
@@ -252,4 +366,5 @@ class PolicyController:
             policy_status=policy.policy_status.value,
             issued_at=policy.issued_at,
             created_at=policy.created_at,
+            updated_at=policy.updated_at,
         )

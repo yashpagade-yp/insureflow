@@ -40,15 +40,38 @@ class PaymentController:
         user_id: str,
         amount: float,
     ) -> PaymentCreateResponse:
-        """Create a provider payment record for one transaction."""
+        """Create a provider payment record for one transaction.
+
+        Args:
+            transaction_id: Related transaction identifier from the main backend.
+            user_id: User identifier linked to the transaction.
+            amount: Final amount to record for the payment.
+
+        Returns:
+            PaymentCreateResponse: Created provider payment response.
+
+        Raises:
+            HTTPException: If identifiers are invalid or the payment cannot be
+                created.
+        """
         try:
             logging.info("Executing PaymentController.create_payment function")
+            normalized_transaction_id = transaction_id.strip()
+            normalized_user_id = user_id.strip()
+            if not normalized_transaction_id or not normalized_user_id:
+                logging.warning("Provider payment creation received empty identifiers")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Transaction id and user id are required.",
+                )
+
             existing_payment = await self.payment_crud.get_by_transaction_id(
-                transaction_id
+                normalized_transaction_id
             )
             if existing_payment is not None:
                 logging.warning(
-                    "Payment already exists for transaction %s", transaction_id
+                    "Payment already exists for transaction %s",
+                    normalized_transaction_id,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -57,8 +80,8 @@ class PaymentController:
 
             payment = PaymentModel.model_validate(
                 {
-                    "transaction_id": transaction_id,
-                    "user_id": user_id,
+                    "transaction_id": normalized_transaction_id,
+                    "user_id": normalized_user_id,
                     "amount": amount,
                 }
             )
@@ -66,7 +89,7 @@ class PaymentController:
             payment = await self.payment_crud.create(payment)
             logging.info(
                 "Payment record created successfully for transaction %s",
-                transaction_id,
+                normalized_transaction_id,
             )
             return PaymentCreateResponse(
                 message="Payment record created successfully.",
@@ -90,13 +113,36 @@ class PaymentController:
             )
 
     async def send_payment_otp(self, payment_reference: str) -> PaymentOtpSendResponse:
-        """Generate and store a new mock payment OTP."""
+        """Generate and store a new mock payment OTP.
+
+        Args:
+            payment_reference: Business payment reference for the current
+                payment.
+
+        Returns:
+            PaymentOtpSendResponse: Provider payment-OTP generation response.
+
+        Raises:
+            HTTPException: If the payment reference is invalid or OTP generation
+                fails.
+        """
         try:
             logging.info("Executing PaymentController.send_payment_otp function")
-            payment = await self.payment_crud.get_by_payment_reference(payment_reference)
+            normalized_payment_reference = payment_reference.strip()
+            if not normalized_payment_reference:
+                logging.warning("Empty payment_reference provided for provider OTP send")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Payment reference is required.",
+                )
+
+            payment = await self.payment_crud.get_by_payment_reference(
+                normalized_payment_reference
+            )
             if payment is None:
                 logging.warning(
-                    "Payment not found for payment reference %s", payment_reference
+                    "Payment not found for payment reference %s",
+                    normalized_payment_reference,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -116,7 +162,7 @@ class PaymentController:
             ):
                 logging.warning(
                     "Payment OTP requested too frequently for payment reference %s",
-                    payment_reference,
+                    normalized_payment_reference,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -140,7 +186,7 @@ class PaymentController:
             await self.payment_crud.save_payment_otp(payment, payment_otp)
             logging.info(
                 "Payment OTP generated successfully for payment reference %s",
-                payment_reference,
+                normalized_payment_reference,
             )
             return PaymentOtpSendResponse(
                 message="Payment OTP generated successfully.",
@@ -167,15 +213,46 @@ class PaymentController:
         payment_reference: str,
         otp: str,
     ) -> PaymentOtpVerifyResponse:
-        """Verify a stored payment OTP and mark the payment successful."""
+        """Verify a stored payment OTP and mark the payment successful.
+
+        Args:
+            transaction_id: Related transaction identifier from the main backend.
+            payment_reference: Business payment reference for the current payment.
+            otp: Customer OTP provided for payment verification.
+
+        Returns:
+            PaymentOtpVerifyResponse: Verified payment response.
+
+        Raises:
+            HTTPException: If identifiers are invalid or the OTP verification
+                flow cannot be completed.
+        """
         try:
             logging.info("Executing PaymentController.verify_payment_otp function")
-            payment = await self.payment_crud.get_by_payment_reference(payment_reference)
-            if payment is None or payment.transaction_id != transaction_id:
+            normalized_transaction_id = transaction_id.strip()
+            normalized_payment_reference = payment_reference.strip()
+            normalized_otp = otp.strip()
+            if (
+                not normalized_transaction_id
+                or not normalized_payment_reference
+                or not normalized_otp
+            ):
+                logging.warning(
+                    "Provider payment OTP verification received empty values"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Transaction id, payment reference, and OTP are required.",
+                )
+
+            payment = await self.payment_crud.get_by_payment_reference(
+                normalized_payment_reference
+            )
+            if payment is None or payment.transaction_id != normalized_transaction_id:
                 logging.warning(
                     "Payment not found for transaction %s and payment reference %s",
-                    transaction_id,
-                    payment_reference,
+                    normalized_transaction_id,
+                    normalized_payment_reference,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -184,7 +261,7 @@ class PaymentController:
             if payment.payment_otp is None:
                 logging.warning(
                     "Payment OTP not generated yet for payment reference %s",
-                    payment_reference,
+                    normalized_payment_reference,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -199,7 +276,7 @@ class PaymentController:
             if payment.payment_otp.expires_at < now:
                 logging.warning(
                     "Expired payment OTP used for payment reference %s",
-                    payment_reference,
+                    normalized_payment_reference,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -209,7 +286,7 @@ class PaymentController:
             if payment.payment_otp.attempt_count >= MAX_OTP_ATTEMPTS:
                 logging.warning(
                     "Maximum payment OTP attempts exceeded for payment reference %s",
-                    payment_reference,
+                    normalized_payment_reference,
                 )
                 payment = await self.payment_crud.mark_failed(payment)
                 raise HTTPException(
@@ -217,12 +294,12 @@ class PaymentController:
                     detail="Maximum payment OTP verification attempts exceeded. Please request a new payment session.",
                 )
 
-            if not verify_hashed_otp(otp, payment.payment_otp.code_hash):
+            if not verify_hashed_otp(normalized_otp, payment.payment_otp.code_hash):
                 payment.payment_otp.attempt_count += 1
                 await self.payment_crud.save_payment_otp(payment, payment.payment_otp)
                 logging.warning(
                     "Invalid payment OTP submitted for payment reference %s",
-                    payment_reference,
+                    normalized_payment_reference,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -236,7 +313,7 @@ class PaymentController:
             if verified_at is None:
                 logging.error(
                     "Payment OTP verification timestamp missing for payment reference %s",
-                    payment_reference,
+                    normalized_payment_reference,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -244,7 +321,7 @@ class PaymentController:
                 )
             logging.info(
                 "Payment OTP verified successfully for payment reference %s",
-                payment_reference,
+                normalized_payment_reference,
             )
             return PaymentOtpVerifyResponse(
                 message="Payment OTP verified successfully.",
@@ -269,13 +346,37 @@ class PaymentController:
             )
 
     async def get_payment_status(self, payment_reference: str) -> PaymentStatusResponse:
-        """Return payment status details for one payment reference."""
+        """Return payment status details for one payment reference.
+
+        Args:
+            payment_reference: Business payment reference to inspect.
+
+        Returns:
+            PaymentStatusResponse: Current provider payment status details.
+
+        Raises:
+            HTTPException: If the payment reference is invalid or the payment
+                cannot be found.
+        """
         try:
             logging.info("Executing PaymentController.get_payment_status function")
-            payment = await self.payment_crud.get_by_payment_reference(payment_reference)
+            normalized_payment_reference = payment_reference.strip()
+            if not normalized_payment_reference:
+                logging.warning(
+                    "Empty payment_reference provided for provider payment status lookup"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Payment reference is required.",
+                )
+
+            payment = await self.payment_crud.get_by_payment_reference(
+                normalized_payment_reference
+            )
             if payment is None:
                 logging.warning(
-                    "Payment not found for payment reference %s", payment_reference
+                    "Payment not found for payment reference %s",
+                    normalized_payment_reference,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,

@@ -84,7 +84,7 @@ async def create_company(
         logging.error("Error in /v1/companies endpoint: %s", error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to create company.",
         )
 
 
@@ -116,7 +116,7 @@ async def list_companies(
         logging.error("Error in /v1/companies endpoint: %s", error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to list companies.",
         )
 
 
@@ -153,7 +153,7 @@ async def get_company(
         logging.error("Error in /v1/companies/%s endpoint: %s", company_id, error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to fetch company.",
         )
 
 
@@ -192,5 +192,5 @@ async def update_company(
         logging.error("Error in /v1/companies/%s endpoint: %s", company_id, error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(error),
+            detail="Failed to update company.",
         )

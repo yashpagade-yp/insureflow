@@ -32,16 +32,36 @@ class CompanyController:
         self.company_crud = CompanyCrud()
 
     async def create_company(self, payload: CompanyCreateRequest) -> CompanyCreateResponse:
-        """Create one provider or mediator company and return its one-time API key."""
+        """Create one provider or mediator company and return its one-time API key.
+
+        Args:
+            payload: Company creation payload from the provider admin flow.
+
+        Returns:
+            CompanyCreateResponse: Created company response including the
+                one-time plain API key.
+
+        Raises:
+            HTTPException: If required fields are invalid, the company already
+                exists, or the company cannot be created.
+        """
         try:
             logging.info("Executing CompanyController.create_company function")
+            normalized_company_name = payload.company_name.strip()
+            if not normalized_company_name:
+                logging.warning("Empty company name provided for company creation")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Company name is required.",
+                )
+
             existing_company = await self.company_crud.get_by_company_name(
-                payload.company_name
+                normalized_company_name
             )
             if existing_company is not None:
                 logging.warning(
                     "Company name %s already exists",
-                    payload.company_name,
+                    normalized_company_name,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -51,12 +71,20 @@ class CompanyController:
             plain_api_key = self._generate_api_key()
             company = await self.company_crud.create(
                 CompanyModel(
-                    company_name=payload.company_name,
+                    company_name=normalized_company_name,
                     company_type=CompanyType(payload.company_type),
                     created_by_admin_id=payload.created_by_admin_id,
                     contact_person_name=payload.contact_person_name,
-                    contact_email=payload.contact_email,
-                    contact_phone=payload.contact_phone,
+                    contact_email=(
+                        payload.contact_email.strip().lower()
+                        if payload.contact_email is not None
+                        else None
+                    ),
+                    contact_phone=(
+                        payload.contact_phone.strip()
+                        if payload.contact_phone is not None
+                        else None
+                    ),
                     api_key_hash=self._hash_api_key(plain_api_key),
                 )
             )
@@ -89,7 +117,14 @@ class CompanyController:
             )
 
     async def list_companies(self) -> CompanyListResponse:
-        """Return all registered provider and mediator companies."""
+        """Return all registered provider and mediator companies.
+
+        Returns:
+            CompanyListResponse: Ordered list of registered companies.
+
+        Raises:
+            HTTPException: If company listing fails.
+        """
         try:
             logging.info("Executing CompanyController.list_companies function")
             companies = await self.company_crud.list_all()
@@ -110,12 +145,31 @@ class CompanyController:
             )
 
     async def get_company(self, company_id: str) -> CompanyResponse:
-        """Return one registered company by object id."""
+        """Return one registered company by object id.
+
+        Args:
+            company_id: ODMantic object id of the requested company.
+
+        Returns:
+            CompanyResponse: Serialized provider company response.
+
+        Raises:
+            HTTPException: If the company id is invalid or the company cannot be
+                found.
+        """
         try:
             logging.info("Executing CompanyController.get_company function")
-            company = await self.company_crud.get_by_id(company_id)
+            normalized_company_id = company_id.strip()
+            if not normalized_company_id:
+                logging.warning("Empty company_id provided for company lookup")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Company id is required.",
+                )
+
+            company = await self.company_crud.get_by_id(normalized_company_id)
             if company is None:
-                logging.warning("Company not found for id %s", company_id)
+                logging.warning("Company not found for id %s", normalized_company_id)
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Company not found.",
@@ -138,22 +192,53 @@ class CompanyController:
         company_id: str,
         payload: CompanyUpdateRequest,
     ) -> CompanyResponse:
-        """Apply partial updates to one registered company."""
+        """Apply partial updates to one registered company.
+
+        Args:
+            company_id: ODMantic object id of the company to update.
+            payload: Partial company updates from the provider admin flow.
+
+        Returns:
+            CompanyResponse: Updated serialized company response.
+
+        Raises:
+            HTTPException: If the company id is invalid or the company cannot be
+                updated.
+        """
         try:
             logging.info("Executing CompanyController.update_company function")
-            company = await self.company_crud.get_by_id(company_id)
+            normalized_company_id = company_id.strip()
+            if not normalized_company_id:
+                logging.warning("Empty company_id provided for company update")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Company id is required.",
+                )
+
+            company = await self.company_crud.get_by_id(normalized_company_id)
             if company is None:
-                logging.warning("Company not found for id %s during update", company_id)
+                logging.warning(
+                    "Company not found for id %s during update",
+                    normalized_company_id,
+                )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Company not found.",
                 )
 
-            updated_company = await self.company_crud.update(
-                company,
-                payload.model_dump(exclude_unset=True),
+            updates = payload.model_dump(exclude_unset=True)
+            if "company_name" in updates and updates["company_name"] is not None:
+                updates["company_name"] = updates["company_name"].strip()
+            if "contact_email" in updates and updates["contact_email"] is not None:
+                updates["contact_email"] = updates["contact_email"].strip().lower()
+            if "contact_phone" in updates and updates["contact_phone"] is not None:
+                updates["contact_phone"] = updates["contact_phone"].strip()
+
+            updated_company = await self.company_crud.update(company, updates)
+            logging.info(
+                "Company updated successfully for id %s",
+                normalized_company_id,
             )
-            logging.info("Company updated successfully for id %s", company_id)
             return self._build_company_response(updated_company)
         except HTTPException as httperror:
             logging.error(
