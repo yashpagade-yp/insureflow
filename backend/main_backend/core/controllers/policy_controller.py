@@ -16,8 +16,9 @@ from core.apis.schemas.response_schema.policy_response_schema import (
 )
 from core.cruds.policy_crud import PolicyCrud
 from core.cruds.transaction_crud import TransactionCrud
-from core.models.policy_model import PolicyAddOn, PolicyModel
+from core.models.policy_model import PolicyAddOn, PolicyModel, generate_policy_number
 from core.models.transaction_model import TransactionStatus
+from core.services.policy_document_service import PolicyDocumentService
 
 logging = logger(__name__)
 
@@ -30,6 +31,7 @@ class PolicyController:
 
         self.policy_crud = PolicyCrud()
         self.transaction_crud = TransactionCrud()
+        self.policy_document_service = PolicyDocumentService()
 
     async def issue_policy(
         self,
@@ -112,9 +114,21 @@ class PolicyController:
             )
             end_date = start_date + timedelta(days=365 * max(duration_years, 1))
             policy_add_ons = [PolicyAddOn.model_validate(item) for item in add_ons]
+            policy_number = generate_policy_number()
+            generated_pdf_url = pdf_url or self.policy_document_service.generate_policy_pdf(
+                policy_number=policy_number,
+                user_id=normalized_user_id,
+                company_name=normalized_company_name,
+                plan_name=normalized_plan_name,
+                payment_reference=normalized_payment_reference,
+                total_premium=total_premium,
+                start_date=start_date.date().isoformat(),
+                end_date=end_date.date().isoformat(),
+            )
             policy = await self.policy_crud.create(
                 PolicyModel.model_validate(
                     {
+                        "policy_number": policy_number,
                         "transaction_id": normalized_transaction_id,
                         "user_id": normalized_user_id,
                         "company_name": normalized_company_name,
@@ -128,7 +142,7 @@ class PolicyController:
                         "start_date": start_date,
                         "end_date": end_date,
                         "payment_reference": normalized_payment_reference,
-                        "pdf_url": pdf_url,
+                        "pdf_url": generated_pdf_url,
                     }
                 )
             )

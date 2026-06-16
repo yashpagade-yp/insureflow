@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from core.apis.api import router as api_router
 
@@ -27,6 +30,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+generated_policies_dir = Path(__file__).resolve().parent / "generated_policies"
+generated_policies_dir.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/generated-policies",
+    StaticFiles(directory=generated_policies_dir),
+    name="generated-policies",
 )
 
 app.include_router(api_router)
