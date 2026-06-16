@@ -41,6 +41,16 @@ class QuoteCrud:
             logging.error("Error in QuoteCrud.get_by_transaction_id function: %s", error)
             raise
 
+    async def list_all(self) -> list[QuoteModel]:
+        """Return all quote documents, newest first."""
+        try:
+            logging.info("Executing QuoteCrud.list_all function")
+            quotes = await self.engine.find(QuoteModel)
+            return sorted(quotes, key=lambda item: item.updated_at, reverse=True)
+        except Exception as error:
+            logging.error("Error in QuoteCrud.list_all function: %s", error)
+            raise
+
     async def save(self, quote: QuoteModel) -> QuoteModel:
         """Persist an already-mutated quote document."""
         try:

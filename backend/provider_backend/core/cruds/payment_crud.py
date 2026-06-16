@@ -55,6 +55,16 @@ class PaymentCrud:
             )
             raise
 
+    async def list_all(self) -> list[PaymentModel]:
+        """Return all payments, newest first."""
+        try:
+            logging.info("Executing PaymentCrud.list_all function")
+            payments = await self.engine.find(PaymentModel)
+            return sorted(payments, key=lambda item: item.updated_at, reverse=True)
+        except Exception as error:
+            logging.error("Error in PaymentCrud.list_all function: %s", error)
+            raise
+
     async def save(self, payment: PaymentModel) -> PaymentModel:
         """Persist an already-mutated payment document."""
         try:

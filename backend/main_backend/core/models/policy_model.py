@@ -7,7 +7,7 @@ project specification and the ODMantic-based project pattern.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
@@ -68,8 +68,8 @@ class Policy(Model):
         add_on_total: Total price of the selected add-ons.
         tax_amount: Tax amount applied to the policy premium.
         total_premium: Final premium paid for the policy.
-        start_date: Policy start date.
-        end_date: Policy expiry date.
+        start_date: Policy start timestamp.
+        end_date: Policy expiry timestamp.
         payment_reference: Optional payment reference linked to the issued
             policy.
         pdf_url: Optional URL for the generated policy PDF.
@@ -103,8 +103,8 @@ class Policy(Model):
     )
     tax_amount: float = Field(..., ge=0, description="Tax amount applied to the policy")
     total_premium: float = Field(..., ge=0, description="Final total premium for the policy")
-    start_date: date = Field(..., description="Policy start date")
-    end_date: date = Field(..., description="Policy end date")
+    start_date: datetime = Field(..., description="Policy start timestamp")
+    end_date: datetime = Field(..., description="Policy end timestamp")
     payment_reference: Optional[str] = Field(
         default=None,
         description="Optional payment reference linked to the issued policy",

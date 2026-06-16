@@ -37,6 +37,30 @@ def _get_authenticated_user(token: str) -> dict:
     return authenticated_user_details
 
 
+def _ensure_admin_or_owner(
+    authenticated_user_details: dict,
+    owner_user_id: str,
+    resource_name: str,
+    resource_identifier: str,
+) -> None:
+    """Allow access only to admins or the resource owner."""
+
+    if (
+        authenticated_user_details.get("user_role") != "ADMIN"
+        and authenticated_user_details.get("id") != owner_user_id
+    ):
+        logging.warning(
+            "Unauthorized access attempt to %s %s by user ID %s",
+            resource_name,
+            resource_identifier,
+            authenticated_user_details.get("id"),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this resource",
+        )
+
+
 @transaction_router.get(
     "/v1/transactions/{transaction_id}",
     response_model=TransactionResponse,
@@ -50,8 +74,15 @@ async def get_transaction(
 
     try:
         logging.info("Calling GET /v1/transactions/%s endpoint", transaction_id)
-        _get_authenticated_user(token)
-        return await TransactionController().get_transaction(transaction_id)
+        authenticated_user_details = _get_authenticated_user(token)
+        transaction_response = await TransactionController().get_transaction(transaction_id)
+        _ensure_admin_or_owner(
+            authenticated_user_details,
+            transaction_response.user_id,
+            "transaction",
+            transaction_id,
+        )
+        return transaction_response
     except HTTPException as httperror:
         logging.error(
             "Error in GET /v1/transactions/%s endpoint: %s",
@@ -115,6 +146,122 @@ async def list_user_transactions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to list user transactions",
+        )
+
+
+@transaction_router.get(
+    "/v1/admins/transactions",
+    response_model=TransactionListResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def list_all_transactions(
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> TransactionListResponse:
+    """Return all transactions for the customer-app admin dashboard."""
+
+    try:
+        logging.info("Calling GET /v1/admins/transactions endpoint")
+        authenticated_user_details = _get_authenticated_user(token)
+        if authenticated_user_details.get("user_role") != "ADMIN":
+            logging.warning(
+                "Unauthorized access attempt to GET /v1/admins/transactions by user ID %s",
+                authenticated_user_details.get("id"),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access this resource",
+            )
+        return await TransactionController().list_all_transactions()
+    except HTTPException as httperror:
+        logging.error("Error in GET /v1/admins/transactions endpoint: %s", httperror)
+        raise httperror
+    except Exception as error:
+        logging.error("Error in GET /v1/admins/transactions endpoint: %s", error)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list transactions",
+        )
+
+
+@transaction_router.get(
+    "/v1/admins/transactions/pending-forms",
+    response_model=TransactionListResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def list_pending_forms(
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> TransactionListResponse:
+    """Return incomplete customer journeys for the admin pending-forms view."""
+
+    try:
+        logging.info("Calling GET /v1/admins/transactions/pending-forms endpoint")
+        authenticated_user_details = _get_authenticated_user(token)
+        if authenticated_user_details.get("user_role") != "ADMIN":
+            logging.warning(
+                "Unauthorized access attempt to GET /v1/admins/transactions/pending-forms by user ID %s",
+                authenticated_user_details.get("id"),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access this resource",
+            )
+        return await TransactionController().list_pending_forms()
+    except HTTPException as httperror:
+        logging.error(
+            "Error in GET /v1/admins/transactions/pending-forms endpoint: %s",
+            httperror,
+        )
+        raise httperror
+    except Exception as error:
+        logging.error(
+            "Error in GET /v1/admins/transactions/pending-forms endpoint: %s",
+            error,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list pending forms",
+        )
+
+
+@transaction_router.get(
+    "/v1/admins/transactions/completed-journeys",
+    response_model=TransactionListResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def list_completed_journeys(
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> TransactionListResponse:
+    """Return purchased customer journeys for the admin completed-journeys view."""
+
+    try:
+        logging.info(
+            "Calling GET /v1/admins/transactions/completed-journeys endpoint"
+        )
+        authenticated_user_details = _get_authenticated_user(token)
+        if authenticated_user_details.get("user_role") != "ADMIN":
+            logging.warning(
+                "Unauthorized access attempt to GET /v1/admins/transactions/completed-journeys by user ID %s",
+                authenticated_user_details.get("id"),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access this resource",
+            )
+        return await TransactionController().list_completed_journeys()
+    except HTTPException as httperror:
+        logging.error(
+            "Error in GET /v1/admins/transactions/completed-journeys endpoint: %s",
+            httperror,
+        )
+        raise httperror
+    except Exception as error:
+        logging.error(
+            "Error in GET /v1/admins/transactions/completed-journeys endpoint: %s",
+            error,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list completed journeys",
         )
 
 

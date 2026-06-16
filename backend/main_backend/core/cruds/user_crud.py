@@ -74,6 +74,17 @@ class UserCrud:
             logging.error("Error in UserCrud.get_admin_by_email function: %s", error)
             raise
 
+    async def list_all(self) -> list[UserModel]:
+        """Return all users, newest first."""
+
+        try:
+            logging.info("Executing UserCrud.list_all function")
+            users = await self.engine.find(UserModel)
+            return sorted(users, key=lambda item: item.updated_at, reverse=True)
+        except Exception as error:
+            logging.error("Error in UserCrud.list_all function: %s", error)
+            raise
+
     async def update(self, user: UserModel, updates: dict[str, Any]) -> UserModel:
         """Apply partial updates to a user document and save it."""
         try:

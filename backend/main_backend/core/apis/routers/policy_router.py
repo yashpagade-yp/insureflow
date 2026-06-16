@@ -38,6 +38,30 @@ def _get_authenticated_user(token: str) -> dict:
     return authenticated_user_details
 
 
+def _ensure_admin_or_owner(
+    authenticated_user_details: dict,
+    owner_user_id: str,
+    resource_name: str,
+    resource_identifier: str,
+) -> None:
+    """Allow access only to admins or the resource owner."""
+
+    if (
+        authenticated_user_details.get("user_role") != "ADMIN"
+        and authenticated_user_details.get("id") != owner_user_id
+    ):
+        logging.warning(
+            "Unauthorized access attempt to %s %s by user ID %s",
+            resource_name,
+            resource_identifier,
+            authenticated_user_details.get("id"),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this resource",
+        )
+
+
 @policy_router.post(
     "/v1/policies/issue",
     response_model=PolicyResponse,
@@ -122,8 +146,15 @@ async def get_policy(
 
     try:
         logging.info("Calling GET /v1/policies/%s endpoint", policy_number)
-        _get_authenticated_user(token)
-        return await PolicyController().get_policy(policy_number)
+        authenticated_user_details = _get_authenticated_user(token)
+        policy_response = await PolicyController().get_policy(policy_number)
+        _ensure_admin_or_owner(
+            authenticated_user_details,
+            policy_response.user_id,
+            "policy",
+            policy_number,
+        )
+        return policy_response
     except HTTPException as httperror:
         logging.error(
             "Error in GET /v1/policies/%s endpoint: %s",
@@ -198,6 +229,40 @@ async def list_user_policies(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to list user policies",
+        )
+
+
+@policy_router.get(
+    "/v1/admins/policies",
+    response_model=PolicyListResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def list_all_policies(
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> PolicyListResponse:
+    """Return all issued policies for the customer-app admin dashboard."""
+
+    try:
+        logging.info("Calling GET /v1/admins/policies endpoint")
+        authenticated_user_details = _get_authenticated_user(token)
+        if authenticated_user_details.get("user_role") != "ADMIN":
+            logging.warning(
+                "Unauthorized access attempt to GET /v1/admins/policies by user ID %s",
+                authenticated_user_details.get("id"),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access this resource",
+            )
+        return await PolicyController().list_all_policies()
+    except HTTPException as httperror:
+        logging.error("Error in GET /v1/admins/policies endpoint: %s", httperror)
+        raise httperror
+    except Exception as error:
+        logging.error("Error in GET /v1/admins/policies endpoint: %s", error)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list policies",
         )
 
 

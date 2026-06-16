@@ -26,6 +26,7 @@ from core.apis.schemas.response_schema.auth_response_schema import (
 )
 from core.apis.schemas.response_schema.user_response_schema import (
     AdminResponse,
+    UserListResponse,
     UserLoginOtpResponse,
     UserLoginVerifyResponse,
     UserResponse,
@@ -331,4 +332,48 @@ async def update_admin_profile(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update admin profile",
+        )
+
+
+@user_router.get(
+    "/v1/admins/users",
+    response_model=UserListResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def list_users(
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> UserListResponse:
+    """Return all users for the customer-app admin dashboard.
+
+    Args:
+        token: JWT token provided in the Authorization header.
+
+    Returns:
+        Ordered user list response.
+
+    Raises:
+        HTTPException: If the token is invalid or the caller is not an admin.
+    """
+
+    try:
+        logging.info("Calling GET /v1/admins/users endpoint")
+        authenticated_user_details = _get_authenticated_user(token)
+        if authenticated_user_details.get("user_role") != "ADMIN":
+            logging.warning(
+                "Unauthorized access attempt to GET /v1/admins/users by user ID %s",
+                authenticated_user_details.get("id"),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access this resource",
+            )
+        return await UserController().list_users()
+    except HTTPException as httperror:
+        logging.error("Error in GET /v1/admins/users endpoint: %s", httperror)
+        raise httperror
+    except Exception as error:
+        logging.error("Error in GET /v1/admins/users endpoint: %s", error)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list users",
         )

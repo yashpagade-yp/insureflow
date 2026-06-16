@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -60,7 +60,12 @@ class PolicyController:
                     detail="A policy already exists for this transaction.",
                 )
 
-            start_date = date.today()
+            start_date = datetime.now(timezone.utc).replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
             end_date = start_date + timedelta(days=365 * max(duration_years, 1))
             policy_add_ons = [PolicyAddOn.model_validate(item) for item in add_ons]
             policy = await self.policy_crud.create(
@@ -189,6 +194,39 @@ class PolicyController:
                 detail="Failed to list user policies.",
             )
 
+    async def list_all_policies(self) -> PolicyListResponse:
+        """Return all issued policies for the admin dashboard.
+
+        Returns:
+            PolicyListResponse: Ordered list of all issued policies.
+
+        Raises:
+            HTTPException: If policy listing fails.
+        """
+
+        try:
+            logging.info("Executing PolicyController.list_all_policies function")
+            policies = await self.policy_crud.list_all()
+            return PolicyListResponse(
+                items=[self._build_policy_response(item) for item in policies],
+                total_count=len(policies),
+            )
+        except HTTPException as httperror:
+            logging.error(
+                "Error in PolicyController.list_all_policies function: %s",
+                httperror,
+            )
+            raise httperror
+        except Exception as error:
+            logging.error(
+                "Error in PolicyController.list_all_policies function: %s",
+                error,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to list policies.",
+            )
+
     def _build_policy_response(self, policy: PolicyModel) -> PolicyResponse:
         """Convert a policy document into the public response schema."""
 
@@ -207,8 +245,8 @@ class PolicyController:
             add_on_total=policy.add_on_total,
             tax_amount=policy.tax_amount,
             total_premium=policy.total_premium,
-            start_date=policy.start_date,
-            end_date=policy.end_date,
+            start_date=policy.start_date.date(),
+            end_date=policy.end_date.date(),
             payment_reference=policy.payment_reference,
             pdf_url=policy.pdf_url,
             policy_status=policy.policy_status.value,

@@ -10,6 +10,7 @@ from fastapi.security import OAuth2PasswordBearer
 from commons.auth import decodeJWT
 from commons.logger import logger
 from core.controllers.payment_controller import PaymentController
+from core.controllers.transaction_controller import TransactionController
 from core.apis.schemas.request_schema.payment_request_schema import (
     PaymentCreateRequest,
     PaymentOtpVerifyRequest,
@@ -37,6 +38,30 @@ def _get_authenticated_user(token: str) -> dict:
             detail="Invalid or expired token",
         )
     return authenticated_user_details
+
+
+def _ensure_admin_or_owner(
+    authenticated_user_details: dict,
+    owner_user_id: str,
+    resource_name: str,
+    resource_identifier: str,
+) -> None:
+    """Allow access only to admins or the resource owner."""
+
+    if (
+        authenticated_user_details.get("user_role") != "ADMIN"
+        and authenticated_user_details.get("id") != owner_user_id
+    ):
+        logging.warning(
+            "Unauthorized access attempt to %s %s by user ID %s",
+            resource_name,
+            resource_identifier,
+            authenticated_user_details.get("id"),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this resource",
+        )
 
 
 @payment_router.post(
@@ -144,8 +169,18 @@ async def get_payment_status(
 
     try:
         logging.info("Calling GET /v1/payments/%s/status endpoint", payment_reference)
-        _get_authenticated_user(token)
-        return await PaymentController().get_payment_status(payment_reference)
+        authenticated_user_details = _get_authenticated_user(token)
+        payment_response = await PaymentController().get_payment_status(payment_reference)
+        transaction_response = await TransactionController().get_transaction(
+            payment_response.transaction_id
+        )
+        _ensure_admin_or_owner(
+            authenticated_user_details,
+            transaction_response.user_id,
+            "payment",
+            payment_reference,
+        )
+        return payment_response
     except HTTPException as httperror:
         logging.error(
             "Error in GET /v1/payments/%s/status endpoint: %s",

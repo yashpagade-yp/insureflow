@@ -10,6 +10,7 @@ from commons.auth import generate_otp, hash_otp, log_otp_for_dev, verify_hashed_
 from commons.logger import logger
 from core.apis.schemas.response_schema.payment_response_schema import (
     PaymentCreateResponse,
+    PaymentListResponse,
     PaymentOtpSendResponse,
     PaymentOtpVerifyResponse,
     PaymentStatusResponse,
@@ -302,6 +303,29 @@ class PaymentController:
                 detail="Failed to fetch payment status.",
             )
 
+    async def list_payments(self) -> PaymentListResponse:
+        """Return all provider payment records for the admin dashboard."""
+
+        try:
+            logging.info("Executing PaymentController.list_payments function")
+            payments = await self.payment_crud.list_all()
+            return PaymentListResponse(
+                items=[self._build_payment_status_response(item) for item in payments],
+                total_count=len(payments),
+            )
+        except HTTPException as httperror:
+            logging.error(
+                "Error in PaymentController.list_payments function: %s",
+                httperror,
+            )
+            raise httperror
+        except Exception as error:
+            logging.error("Error in PaymentController.list_payments function: %s", error)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to list payments.",
+            )
+
     def _reset_payment_attempt_window_if_needed(
         self,
         payment_otp: PaymentOtp,
@@ -329,3 +353,15 @@ class PaymentController:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
+
+    def _build_payment_status_response(self, payment: PaymentModel) -> PaymentStatusResponse:
+        """Convert a payment document into the public payment-status schema."""
+
+        return PaymentStatusResponse(
+            transaction_id=payment.transaction_id,
+            payment_reference=payment.payment_reference,
+            payment_status=payment.payment_status.value,
+            amount=payment.amount,
+            gateway_url=payment.gateway_url,
+            updated_at=payment.updated_at,
+        )

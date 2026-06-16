@@ -102,3 +102,20 @@ class QuoteResponse(BaseModel):
     updated_at: datetime = Field(..., description="Quote last-update timestamp")
 
     model_config = ConfigDict(extra="forbid")
+
+
+class QuoteListResponse(BaseModel):
+    """Represents a list of quote documents returned to the provider admin.
+
+    Attributes:
+        items: Returned quote documents.
+        total_count: Total number of returned quote documents.
+    """
+
+    items: list[QuoteResponse] = Field(
+        default_factory=list,
+        description="Returned quote documents",
+    )
+    total_count: int = Field(..., ge=0, description="Total number of returned quotes")
+
+    model_config = ConfigDict(extra="forbid")

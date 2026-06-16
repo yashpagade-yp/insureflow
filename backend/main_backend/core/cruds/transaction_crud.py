@@ -80,6 +80,47 @@ class TransactionCrud:
             )
             raise
 
+    async def list_all(self) -> list[TransactionModel]:
+        """Return all transactions, newest first."""
+
+        try:
+            logging.info("Executing TransactionCrud.list_all function")
+            transactions = await self.engine.find(TransactionModel)
+            return sorted(transactions, key=lambda item: item.updated_at, reverse=True)
+        except Exception as error:
+            logging.error("Error in TransactionCrud.list_all function: %s", error)
+            raise
+
+    async def list_incomplete(self) -> list[TransactionModel]:
+        """Return all incomplete transactions, newest first."""
+
+        try:
+            logging.info("Executing TransactionCrud.list_incomplete function")
+            transactions = await self.list_all()
+            return [
+                item
+                for item in transactions
+                if item.current_status != TransactionStatus.PURCHASED
+            ]
+        except Exception as error:
+            logging.error("Error in TransactionCrud.list_incomplete function: %s", error)
+            raise
+
+    async def list_completed(self) -> list[TransactionModel]:
+        """Return all completed transactions, newest first."""
+
+        try:
+            logging.info("Executing TransactionCrud.list_completed function")
+            transactions = await self.list_all()
+            return [
+                item
+                for item in transactions
+                if item.current_status == TransactionStatus.PURCHASED
+            ]
+        except Exception as error:
+            logging.error("Error in TransactionCrud.list_completed function: %s", error)
+            raise
+
     async def get_latest_incomplete_by_user_id(self, user_id: str) -> TransactionModel | None:
         """Return the latest transaction that has not been fully purchased."""
         try:
