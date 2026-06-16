@@ -1,24 +1,35 @@
-"""
-InsureFlow Bot — MCP Client
-==============================
-Connects to our existing MCP Server (port 8080) and wraps all 14 customer
-journey tools as Python functions that Pipecat can register with Groq.
+"""InsureFlow Bot — MCP Client.
 
-When Groq decides to call a tool, Pipecat routes it here.
-This module calls our MCP server, which calls the main_backend API.
-
-Architecture:
-    Groq LLM decides → Pipecat calls function here
-    → call_mcp_tool() sends JSON-RPC to MCP server (port 8080)
-    → MCP server calls main_backend (port 8000)
-    → result flows back to Groq
+Connects to the local InsureFlow MCP server over Streamable HTTP and
+exposes LLM-callable tool wrappers for the customer journey.
 """
 
+import json
 import httpx
 from loguru import logger
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
 from pipecat.services.llm_service import FunctionCallParams
 
 from config import config
+
+
+MCP_TOOL_NAME_MAP = {
+    "submit_insurance_form": "tool_submit_insurance_form",
+    "get_quotes": "tool_get_quotes",
+    "select_plan": "tool_select_plan",
+    "select_add_ons": "tool_select_add_ons",
+    "create_payment": "tool_create_payment",
+    "send_payment_otp": "tool_send_payment_otp",
+    "verify_payment_otp": "tool_verify_payment_otp",
+    "get_payment_status": "tool_get_payment_status",
+    "get_policy": "tool_get_policy",
+    "send_login_otp": "tool_send_login_otp",
+    "verify_login_otp": "tool_verify_login_otp",
+    "get_user_transactions": "tool_get_user_transactions",
+    "get_latest_incomplete_journey": "tool_get_latest_incomplete_journey",
+    "list_user_policies": "tool_list_user_policies",
+}
 
 
 # ── OpenAI-compatible Tool Definitions ────────────────────────────────────────
@@ -45,17 +56,27 @@ TOOLS = [
                         "enum": ["health", "life", "general"],
                         "description": "Type of insurance the customer wants",
                     },
-                    "first_name": {"type": "string"},
-                    "last_name": {"type": "string"},
-                    "email": {"type": "string"},
-                    "dob": {"type": "string", "description": "Date of birth in YYYY-MM-DD format"},
-                    "gender": {"type": "string", "enum": ["male", "female", "other"]},
-                    "sum_insured": {"type": "number", "description": "Coverage amount in rupees"},
+                    "proposer_first_name": {"type": "string"},
+                    "proposer_last_name": {"type": "string"},
+                    "proposer_email": {"type": "string"},
+                    "proposer_dob": {
+                        "type": "string",
+                        "description": "Date of birth in YYYY-MM-DD format",
+                    },
+                    "proposer_gender": {"type": "string", "enum": ["male", "female", "other"]},
+                    "sum_insured_requested": {"type": "number", "description": "Coverage amount in rupees"},
                     "policy_term_years": {"type": "integer", "description": "Policy term in years"},
                     "city": {"type": "string"},
                     "state": {"type": "string"},
                 },
-                "required": ["mobile_number", "insurance_type", "first_name", "last_name"],
+                "required": [
+                    "mobile_number",
+                    "insurance_type",
+                    "proposer_first_name",
+                    "proposer_last_name",
+                    "sum_insured_requested",
+                    "policy_term_years",
+                ],
             },
         },
     },
@@ -100,9 +121,8 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "transaction_id": {"type": "string"},
-                    "token": {"type": "string"},
                 },
-                "required": ["transaction_id", "token"],
+                "required": ["transaction_id"],
             },
         },
     },
@@ -116,9 +136,8 @@ TOOLS = [
                 "properties": {
                     "transaction_id": {"type": "string"},
                     "selected_plan_id": {"type": "string"},
-                    "token": {"type": "string"},
                 },
-                "required": ["transaction_id", "selected_plan_id", "token"],
+                "required": ["transaction_id", "selected_plan_id"],
             },
         },
     },
@@ -146,9 +165,8 @@ TOOLS = [
                         },
                         "description": "List of selected add-ons. Pass empty list if none.",
                     },
-                    "token": {"type": "string"},
                 },
-                "required": ["transaction_id", "selected_plan_id", "token"],
+                "required": ["transaction_id", "selected_plan_id", "selected_add_ons"],
             },
         },
     },
@@ -166,9 +184,8 @@ TOOLS = [
                     "transaction_id": {"type": "string"},
                     "user_id": {"type": "string"},
                     "amount": {"type": "number", "description": "Total premium amount in rupees"},
-                    "token": {"type": "string"},
                 },
-                "required": ["transaction_id", "user_id", "amount", "token"],
+                "required": ["transaction_id", "user_id", "amount"],
             },
         },
     },
@@ -181,9 +198,8 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "payment_reference": {"type": "string"},
-                    "token": {"type": "string"},
                 },
-                "required": ["payment_reference", "token"],
+                "required": ["payment_reference"],
             },
         },
     },
@@ -201,9 +217,23 @@ TOOLS = [
                     "transaction_id": {"type": "string"},
                     "payment_reference": {"type": "string"},
                     "otp": {"type": "string"},
+                },
+                "required": ["transaction_id", "payment_reference", "otp"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_policy",
+            "description": "Fetch one issued policy by policy number after the customer is logged in.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "policy_number": {"type": "string"},
                     "token": {"type": "string"},
                 },
-                "required": ["transaction_id", "payment_reference", "otp", "token"],
+                "required": ["policy_number", "token"],
             },
         },
     },
@@ -261,34 +291,57 @@ TOOLS = [
 # ── MCP HTTP Client ────────────────────────────────────────────────────────────
 
 async def call_mcp_tool(tool_name: str, arguments: dict) -> dict:
-    """
-    Generic helper — sends a JSON-RPC request to our MCP server.
-    The MCP server is running on port 8080 and routes to main_backend (port 8000).
+    """Call one MCP tool over Streamable HTTP and normalize the result."""
 
-    Returns the tool result dict, or an error dict if something fails.
-    """
-    payload = {
-        "jsonrpc": "2.0",
-        "method": "tools/call",
-        "id": 1,
-        "params": {
-            "name": tool_name,
-            "arguments": arguments,
-        },
-    }
+    actual_tool_name = MCP_TOOL_NAME_MAP.get(tool_name, tool_name)
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(config.mcp_server_url, json=payload)
-            response.raise_for_status()
-            result = response.json()
-            logger.debug(f"MCP tool '{tool_name}' returned: {result}")
-            return result.get("result", {})
+        async with streamablehttp_client(config.mcp_server_url) as (
+            read_stream,
+            write_stream,
+            _,
+        ):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                result = await session.call_tool(actual_tool_name, arguments or {})
+                normalized = _normalize_tool_result(result)
+                logger.debug(f"MCP tool '{actual_tool_name}' returned: {normalized}")
+                return normalized
     except httpx.RequestError as e:
-        logger.error(f"MCP tool '{tool_name}' request failed: {e}")
-        return {"error": f"Could not reach the insurance backend. Please try again."}
-    except httpx.HTTPStatusError as e:
-        logger.error(f"MCP tool '{tool_name}' HTTP error {e.response.status_code}: {e}")
-        return {"error": f"Backend returned an error. Please try again."}
+        logger.error(f"MCP tool '{actual_tool_name}' request failed: {e}")
+        return {"error": "Could not reach the insurance backend. Please try again."}
+    except Exception as e:
+        logger.error(f"MCP tool '{actual_tool_name}' failed: {e}")
+        return {"error": "Backend returned an error. Please try again."}
+
+
+def _normalize_tool_result(result) -> dict:
+    """Convert an MCP CallToolResult into a plain dict for the LLM layer."""
+
+    if getattr(result, "structuredContent", None):
+        return result.structuredContent
+
+    texts: list[str] = []
+    for item in getattr(result, "content", []) or []:
+        text = getattr(item, "text", None)
+        if text:
+            texts.append(text)
+
+    if texts:
+        merged_text = "\n".join(texts).strip()
+        try:
+            payload = json.loads(merged_text)
+            if isinstance(payload, dict):
+                return payload
+        except json.JSONDecodeError:
+            pass
+
+        if getattr(result, "isError", False):
+            return {"error": merged_text}
+        return {"message": merged_text}
+
+    if getattr(result, "isError", False):
+        return {"error": "Tool call failed."}
+    return {}
 
 
 # ── Tool Handler Functions ─────────────────────────────────────────────────────
@@ -351,6 +404,12 @@ async def verify_payment_otp(params: FunctionCallParams):
     await params.result_callback(result)
 
 
+async def get_policy(params: FunctionCallParams):
+    """Fetches one issued policy for a logged-in customer."""
+    result = await call_mcp_tool("get_policy", params.arguments)
+    await params.result_callback(result)
+
+
 async def list_user_policies(params: FunctionCallParams):
     """Returns all issued policies for the customer."""
     result = await call_mcp_tool("list_user_policies", params.arguments)
@@ -390,6 +449,7 @@ def register_tools(llm) -> None:
     llm.register_function("create_payment", create_payment)
     llm.register_function("send_payment_otp", send_payment_otp)
     llm.register_function("verify_payment_otp", verify_payment_otp)
+    llm.register_function("get_policy", get_policy)
     llm.register_function("list_user_policies", list_user_policies)
     llm.register_function("get_user_transactions", get_user_transactions)
     llm.register_function("get_latest_incomplete_journey", get_latest_incomplete_journey)

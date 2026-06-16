@@ -1,7 +1,7 @@
 """API client for the InsureFlow CLI.
 
-All functions are synchronous (using httpx.Client) since the CLI is
-interactive and runs step-by-step.
+The CLI mirrors the current MCP tool flow but talks directly to the
+main backend over HTTP.
 """
 
 from __future__ import annotations
@@ -114,24 +114,23 @@ def verify_login_otp(mobile_number: str, otp: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# 3. Quotes (Requires JWT token)
+# 3. Quotes (No auth required)
 # ---------------------------------------------------------------------------
 
-def get_quotes(transaction_id: str, token: str) -> dict:
+def get_quotes(transaction_id: str) -> dict:
     """Fetch provider-generated quotes for the transaction."""
-    return _get(f"/v1/quotes/{transaction_id}", token=token)
+    return _get(f"/v1/quotes/{transaction_id}")
 
 
 # ---------------------------------------------------------------------------
-# 4. Plan & Add-on Selection (Requires JWT token)
+# 4. Plan & Add-on Selection (No auth required)
 # ---------------------------------------------------------------------------
 
-def select_plan(transaction_id: str, plan_id: str, token: str) -> dict:
+def select_plan(transaction_id: str, plan_id: str) -> dict:
     """Save the customer's selected plan on the transaction."""
     return _patch(
         "/v1/transactions/select-plan",
         {"transaction_id": transaction_id, "selected_plan_id": plan_id},
-        token=token,
     )
 
 
@@ -139,7 +138,6 @@ def select_add_ons(
     transaction_id: str,
     plan_id: str,
     add_ons: list[dict],
-    token: str,
 ) -> dict:
     """Save the selected add-ons for the chosen plan."""
     return _patch(
@@ -149,19 +147,17 @@ def select_add_ons(
             "selected_plan_id": plan_id,
             "selected_add_ons": add_ons,
         },
-        token=token,
     )
 
 
 # ---------------------------------------------------------------------------
-# 5. Payment (Requires JWT token)
+# 5. Payment (Creation + OTP verification require no auth)
 # ---------------------------------------------------------------------------
 
 def create_payment(
     transaction_id: str,
     user_id: str,
     amount: float,
-    token: str,
 ) -> dict:
     """Create a payment session for the transaction."""
     return _post(
@@ -171,24 +167,18 @@ def create_payment(
             "user_id": user_id,
             "amount": amount,
         },
-        token=token,
     )
 
 
-def send_payment_otp(payment_reference: str, token: str) -> dict:
+def send_payment_otp(payment_reference: str) -> dict:
     """Trigger a mock payment OTP for the given payment reference."""
-    return _post(
-        f"/v1/payments/{payment_reference}/send-otp",
-        {},
-        token=token,
-    )
+    return _post(f"/v1/payments/{payment_reference}/send-otp", {})
 
 
 def verify_payment_otp(
     transaction_id: str,
     payment_reference: str,
     otp: str,
-    token: str,
 ) -> dict:
     """Verify the payment OTP. On success the policy is issued."""
     return _post(
@@ -198,7 +188,6 @@ def verify_payment_otp(
             "payment_reference": payment_reference,
             "otp": otp,
         },
-        token=token,
     )
 
 

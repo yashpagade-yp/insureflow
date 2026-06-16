@@ -4,7 +4,7 @@ Run with:
     python main.py
 
 Flows:
-    1. New Customer  -> fill form -> OTP login -> quotes -> plan -> payment -> policy
+    1. New Customer  -> form -> quotes -> plan -> payment -> optional login -> policy
     2. Returning Customer -> OTP login -> view policies / transactions / resume journey
 """
 
@@ -111,6 +111,32 @@ def safe_call(fn, *args, action: str = "Calling API", **kwargs):
             return None
 
 
+def extract_items(payload: dict, singular_fallback: bool = False) -> list[dict]:
+    """Normalize list responses from the current backend/MCP contract."""
+
+    if not payload:
+        return []
+    if isinstance(payload, list):
+        return payload
+    if "items" in payload and isinstance(payload["items"], list):
+        return payload["items"]
+    if singular_fallback:
+        return [payload]
+    return []
+
+
+def get_status(payload: dict) -> str:
+    """Read the most appropriate status field from a response payload."""
+
+    return str(
+        payload.get("current_status")
+        or payload.get("payment_status")
+        or payload.get("policy_status")
+        or payload.get("status")
+        or "-"
+    )
+
+
 # ---------------------------------------------------------------------------
 # OTP Login Helper
 # ---------------------------------------------------------------------------
@@ -208,7 +234,7 @@ def display_policy(policy: dict) -> None:
         f"[bold cyan]Base Premium:[/bold cyan]   Rs.{policy.get('base_premium', 0):,.0f}",
         f"[bold cyan]Total Premium:[/bold cyan]  Rs.{policy.get('total_premium', 0):,.0f}",
         f"[bold cyan]Term:[/bold cyan]           {policy.get('duration_years', '-')} years",
-        f"[bold cyan]Status:[/bold cyan]         {policy.get('status', '-')}",
+        f"[bold cyan]Status:[/bold cyan]         {policy.get('policy_status', policy.get('status', '-'))}",
     ]
     pdf = policy.get("pdf_url")
     if pdf:
@@ -244,7 +270,7 @@ def display_policies_list(policies: list[dict]) -> None:
     table.add_column("Premium", style="bold green", justify="right")
     table.add_column("Status", justify="center")
     for i, p in enumerate(policies, start=1):
-        status = p.get("status", "-")
+        status = p.get("policy_status", p.get("status", "-"))
         style = "green" if status == "ACTIVE" else "yellow"
         table.add_row(
             str(i),
@@ -277,7 +303,7 @@ def display_transactions_list(transactions: list[dict]) -> None:
     table.add_column("Status", style="bold")
     table.add_column("Created At")
     for i, t in enumerate(transactions, start=1):
-        status = t.get("status", "-")
+        status = t.get("current_status", t.get("status", "-"))
         style = "green" if status == "PURCHASED" else "yellow"
         table.add_row(
             str(i),
@@ -299,13 +325,13 @@ def flow_new_customer() -> None:
 
     Step 1:  Collect form details
     Step 2:  Submit form (no auth) -> transaction_id + user_id created
-    Step 3:  OTP login -> get JWT token
-    Step 4:  Fetch quotes (requires JWT)
+    Step 3:  Fetch quotes
+    Step 4:  Review quote options
     Step 5:  Select plan
     Step 6:  Select add-ons (optional)
     Step 7:  Create payment session
     Step 8:  Verify payment OTP -> policy auto-issued
-    Step 9:  Show issued policy with PDF
+    Step 9:  Optional login to view issued policy with PDF
     """
 
     # Step 1: Personal Details
@@ -355,24 +381,13 @@ def flow_new_customer() -> None:
     user_id = form_result.get("user_id")
     print_success(f"Form submitted! Transaction ID: [bold]{transaction_id}[/bold]")
 
-    # Step 3: OTP Login (customer verifies mobile to get JWT)
-    print_step(3, "Verify Your Mobile via OTP")
-    login = do_login(mobile)
-    if not login:
-        return
-    token, uid = login
-    user_id = uid or user_id
-
-    # Step 4: Fetch Quotes (requires JWT)
-    print_step(4, "Fetching Quotes from Providers")
-    quotes_resp = safe_call(api.get_quotes, transaction_id, token, action="Fetching quotes")
+    # Step 3: Fetch Quotes
+    print_step(3, "Fetching Quotes from Providers")
+    quotes_resp = safe_call(api.get_quotes, transaction_id, action="Fetching quotes")
     if not quotes_resp:
         return
 
-    quotes: list[dict] = (
-        quotes_resp.get("quotes") or quotes_resp.get("data")
-        or (quotes_resp if isinstance(quotes_resp, list) else [])
-    )
+    quotes: list[dict] = extract_items(quotes_resp)
     if not quotes:
         print_error("No quotes available for this transaction.")
         return
@@ -391,9 +406,16 @@ def flow_new_customer() -> None:
         or chosen_quote.get("selected_plan_id")
         or chosen_quote.get("id")
     )
-    chosen_premium = float(chosen_quote.get("base_premium") or chosen_quote.get("premium") or 0)
+    chosen_premium = float(chosen_quote.get("total_premium") or 0)
 
-    safe_call(api.select_plan, transaction_id, chosen_plan_id, token, action="Saving plan selection")
+    select_plan_resp = safe_call(
+        api.select_plan,
+        transaction_id,
+        chosen_plan_id,
+        action="Saving plan selection",
+    )
+    if not select_plan_resp:
+        return
     print_success(f"Plan selected: [bold]{chosen_quote.get('plan_name', chosen_plan_id)}[/bold]")
 
     # Step 6: Select Add-ons (optional)
@@ -412,12 +434,30 @@ def flow_new_customer() -> None:
                         if 1 <= n <= len(available_add_ons):
                             ao = available_add_ons[n - 1]
                             selected_add_ons.append({"name": ao.get("name", ""), "price": ao.get("price", 0)})
-                            chosen_premium += float(ao.get("price", 0))
 
-    safe_call(
-        api.select_add_ons, transaction_id, chosen_plan_id, selected_add_ons, token,
+    add_ons_resp = safe_call(
+        api.select_add_ons,
+        transaction_id,
+        chosen_plan_id,
+        selected_add_ons,
         action="Saving add-on selections",
     )
+    if not add_ons_resp:
+        return
+    refreshed_quotes_resp = safe_call(
+        api.get_quotes,
+        transaction_id,
+        action="Refreshing total premium",
+    )
+    if refreshed_quotes_resp:
+        refreshed_quotes = extract_items(refreshed_quotes_resp)
+        updated_quote = next(
+            (item for item in refreshed_quotes if item.get("plan_id") == chosen_plan_id),
+            None,
+        )
+        if updated_quote is not None:
+            chosen_quote = updated_quote
+            chosen_premium = float(updated_quote.get("total_premium") or chosen_premium)
     if selected_add_ons:
         print_success(f"Add-ons saved: {[ao['name'] for ao in selected_add_ons]}")
     else:
@@ -432,7 +472,7 @@ def flow_new_customer() -> None:
         return
 
     payment_resp = safe_call(
-        api.create_payment, transaction_id, user_id, chosen_premium, token,
+        api.create_payment, transaction_id, user_id, chosen_premium,
         action="Creating payment session",
     )
     if not payment_resp:
@@ -447,12 +487,18 @@ def flow_new_customer() -> None:
 
     # Step 8: Payment OTP
     print_step(8, "Confirm Payment via OTP")
-    safe_call(api.send_payment_otp, payment_reference, token, action="Sending payment OTP")
+    send_otp_resp = safe_call(
+        api.send_payment_otp,
+        payment_reference,
+        action="Sending payment OTP",
+    )
+    if not send_otp_resp:
+        return
     print_success("Payment OTP sent! (Mock OTP - check backend logs for the code)")
 
     pay_otp = ask("Enter Payment OTP")
     verify_resp = safe_call(
-        api.verify_payment_otp, transaction_id, payment_reference, pay_otp, token,
+        api.verify_payment_otp, transaction_id, payment_reference, pay_otp,
         action="Verifying payment OTP",
     )
     if not verify_resp:
@@ -460,32 +506,31 @@ def flow_new_customer() -> None:
 
     print_success("Payment verified! Policy is being issued...")
 
-    # Step 9: Show Issued Policy
-    print_step(9, "Your Policy")
-    policies_resp = safe_call(api.list_user_policies, user_id, token, action="Fetching your policy")
+    # Step 9: Optional login for policy view
+    print_step(9, "View Issued Policy")
+    policy_number = verify_resp.get("policy_number")
+    if not policy_number:
+        print_success("Payment complete! Policy has been issued.")
+        print_info("Login later as a returning customer to view policy details.")
+        return
 
-    policies: list[dict] = []
-    if policies_resp:
-        policies = (
-            policies_resp.get("policies") or policies_resp.get("data")
-            or (policies_resp if isinstance(policies_resp, list) else [])
-        )
+    if not Confirm.ask(
+        "[bold white]Log in now to fetch your issued policy and PDF?[/bold white]",
+        default=True,
+    ):
+        print_success(f"Policy issued successfully. Policy Number: [bold]{policy_number}[/bold]")
+        print_info("Use Returning Customer login anytime to view the full policy.")
+        return
 
-    if policies:
-        display_policy(policies[-1])
-    else:
-        # Try from verify_resp directly
-        policy_number = (
-            verify_resp.get("policy_number")
-            or (verify_resp.get("policy") or {}).get("policy_number")
-        )
-        if policy_number:
-            pol = safe_call(api.get_policy, policy_number, token, action="Fetching policy")
-            if pol:
-                display_policy(pol)
-        else:
-            print_success("Payment complete! Policy has been issued.")
-            print_info("Login as Returning Customer to view your policy and PDF.")
+    login = do_login(mobile)
+    if not login:
+        print_info(f"Policy issued successfully. Policy Number: {policy_number}")
+        return
+    token, uid = login
+    user_id = uid or user_id
+    pol = safe_call(api.get_policy, policy_number, token, action="Fetching policy")
+    if pol:
+        display_policy(pol)
 
 
 # ---------------------------------------------------------------------------
@@ -519,7 +564,7 @@ def flow_returning_customer() -> None:
 
     console.print("\n[bold yellow]What would you like to do?[/bold yellow]")
     console.print("  [bold white]1.[/bold white] View my issued policies (with PDF)")
-    console.print("  [bold white]2.[/bold white] View all my transactions + status + payment")
+    console.print("  [bold white]2.[/bold white] View all my transactions + status")
     console.print("  [bold white]3.[/bold white] Resume my latest incomplete journey")
     choice = ask("Select option", default="1")
 
@@ -529,10 +574,7 @@ def flow_returning_customer() -> None:
         resp = safe_call(api.list_user_policies, user_id, token, action="Fetching policies")
         if not resp:
             return
-        policies = (
-            resp.get("policies") or resp.get("data")
-            or (resp if isinstance(resp, list) else [])
-        )
+        policies = extract_items(resp)
         display_policies_list(policies)
         if policies and Confirm.ask("\n[bold white]View full details of a policy?[/bold white]", default=False):
             num = ask_int(f"Enter policy number (1-{len(policies)})", default=1)
@@ -545,10 +587,7 @@ def flow_returning_customer() -> None:
         resp = safe_call(api.list_user_transactions, user_id, token, action="Fetching transactions")
         if not resp:
             return
-        txns = (
-            resp.get("transactions") or resp.get("data")
-            or (resp if isinstance(resp, list) else [])
-        )
+        txns = extract_items(resp)
         display_transactions_list(txns)
         if not txns:
             return
@@ -569,7 +608,7 @@ def flow_returning_customer() -> None:
                 Panel(
                     f"[bold cyan]Transaction ID:[/bold cyan]      {tid}\n"
                     f"[bold cyan]Insurance Type:[/bold cyan]      {detail.get('insurance_type', '-').upper()}\n"
-                    f"[bold cyan]Status:[/bold cyan]              [yellow]{detail.get('status', '-')}[/yellow]\n"
+                    f"[bold cyan]Status:[/bold cyan]              [yellow]{get_status(detail)}[/yellow]\n"
                     f"[bold cyan]Selected Plan:[/bold cyan]       {detail.get('selected_plan_id', 'Not selected yet')}\n"
                     f"[bold cyan]Payment Reference:[/bold cyan]   {pay_ref}\n"
                     f"[bold cyan]Created At:[/bold cyan]          {str(detail.get('created_at', '-'))[:19]}",
@@ -579,8 +618,10 @@ def flow_returning_customer() -> None:
                 )
             )
             # Check payment status if ref exists
-            if pay_ref and pay_ref != "-":
-                if Confirm.ask("\n[bold white]Check payment status?[/bold white]", default=False):
+            if Confirm.ask("\n[bold white]Check payment status?[/bold white]", default=False):
+                if not pay_ref or pay_ref == "-":
+                    pay_ref = ask("Payment Reference (if available)", default="").strip() or "-"
+                if pay_ref != "-":
                     pay_status = safe_call(
                         api.get_payment_status, pay_ref, token, action="Fetching payment status"
                     )
@@ -590,12 +631,14 @@ def flow_returning_customer() -> None:
                             Panel(
                                 f"[bold cyan]Payment Reference:[/bold cyan]  {pay_ref}\n"
                                 f"[bold cyan]Amount:[/bold cyan]             Rs.{pay_status.get('amount', 0):,.0f}\n"
-                                f"[bold cyan]Payment Status:[/bold cyan]     [yellow]{pay_status.get('status', '-')}[/yellow]",
+                                f"[bold cyan]Payment Status:[/bold cyan]     [yellow]{get_status(pay_status)}[/yellow]",
                                 title="[bold yellow]  Payment Status  [/bold yellow]",
                                 border_style="yellow",
                                 padding=(1, 2),
                             )
                         )
+                else:
+                    print_info("Payment reference is required to check payment status.")
 
     # Option 3: Smart Resume
     elif choice == "3":
@@ -615,10 +658,10 @@ def flow_returning_customer() -> None:
 
         # Get full transaction to know exact status
         txn = safe_call(api.get_transaction, transaction_id, token, action="Checking journey status")
-        current_status = (txn or {}).get("status", "UNKNOWN")
+        current_status = get_status(txn or {"current_status": "UNKNOWN"})
         pay_ref = (txn or {}).get("payment_reference")
         selected_plan_id = (txn or {}).get("selected_plan_id")
-        amount = float((txn or {}).get("total_premium") or (txn or {}).get("amount") or 0)
+        amount = float((txn or {}).get("amount") or 0)
 
         console.print()
         console.print(
@@ -640,17 +683,21 @@ def flow_returning_customer() -> None:
         STATUS_PAYMENT = {"PAYMENT_PENDING", "PAYMENT_CREATED"}
         STATUS_ADDONS = {"ADD_ONS_SELECTED"}
         STATUS_PLAN = {"OFFER_SELECTED", "PLAN_SELECTED"}
-        STATUS_FORM = {"FORM_SUBMITTED", "PENDING", "QUOTE_PENDING", "CREATED", "UNKNOWN"}
+        STATUS_FORM = {
+            "FORM_SUBMITTED",
+            "PENDING",
+            "QUOTE_PENDING",
+            "QUOTES_GENERATED",
+            "CREATED",
+            "UNKNOWN",
+        }
 
         # Already done
         if current_status in STATUS_DONE:
             print_success("This journey is already complete!")
             p_resp = safe_call(api.list_user_policies, user_id, token, action="Fetching policy")
             if p_resp:
-                pols = (
-                    p_resp.get("policies") or p_resp.get("data")
-                    or (p_resp if isinstance(p_resp, list) else [])
-                )
+                pols = extract_items(p_resp)
                 if pols:
                     display_policy(pols[-1])
             return
@@ -661,13 +708,10 @@ def flow_returning_customer() -> None:
         # Fetch quotes for any status except payment pending
         if current_status not in STATUS_PAYMENT:
             print_step(3, "Fetching Quotes")
-            q_resp = safe_call(api.get_quotes, transaction_id, token, action="Fetching quotes")
+            q_resp = safe_call(api.get_quotes, transaction_id, action="Fetching quotes")
             if not q_resp:
                 return
-            quotes = (
-                q_resp.get("quotes") or q_resp.get("data")
-                or (q_resp if isinstance(q_resp, list) else [])
-            )
+            quotes = extract_items(q_resp)
             if not quotes:
                 print_error("No quotes found.")
                 return
@@ -678,7 +722,7 @@ def flow_returning_customer() -> None:
                 for q in quotes:
                     if (q.get("plan_id") or q.get("id")) == selected_plan_id:
                         chosen_quote = q
-                        amount = float(q.get("base_premium") or q.get("premium") or 0)
+                        amount = float(q.get("total_premium") or amount)
                         break
 
         # Select plan if needed
@@ -692,8 +736,15 @@ def flow_returning_customer() -> None:
             selected_plan_id = (
                 chosen_quote.get("plan_id") or chosen_quote.get("selected_plan_id") or chosen_quote.get("id")
             )
-            amount = float(chosen_quote.get("base_premium") or chosen_quote.get("premium") or 0)
-            safe_call(api.select_plan, transaction_id, selected_plan_id, token, action="Saving plan")
+            amount = float(chosen_quote.get("total_premium") or amount)
+            select_plan_resp = safe_call(
+                api.select_plan,
+                transaction_id,
+                selected_plan_id,
+                action="Saving plan",
+            )
+            if not select_plan_resp:
+                return
             print_success(f"Plan selected: [bold]{chosen_quote.get('plan_name', selected_plan_id)}[/bold]")
             current_status = "OFFER_SELECTED"
 
@@ -713,11 +764,29 @@ def flow_returning_customer() -> None:
                                 if 1 <= n <= len(available_add_ons):
                                     ao = available_add_ons[n - 1]
                                     selected_add_ons.append({"name": ao.get("name", ""), "price": ao.get("price", 0)})
-                                    amount += float(ao.get("price", 0))
-            safe_call(
-                api.select_add_ons, transaction_id, selected_plan_id, selected_add_ons, token,
+            add_ons_resp = safe_call(
+                api.select_add_ons,
+                transaction_id,
+                selected_plan_id,
+                selected_add_ons,
                 action="Saving add-ons",
             )
+            if not add_ons_resp:
+                return
+            refreshed_quotes_resp = safe_call(
+                api.get_quotes,
+                transaction_id,
+                action="Refreshing total premium",
+            )
+            if refreshed_quotes_resp:
+                refreshed_quotes = extract_items(refreshed_quotes_resp)
+                updated_quote = next(
+                    (item for item in refreshed_quotes if item.get("plan_id") == selected_plan_id),
+                    None,
+                )
+                if updated_quote is not None:
+                    chosen_quote = updated_quote
+                    amount = float(updated_quote.get("total_premium") or amount)
             current_status = "ADD_ONS_SELECTED"
 
         # Create payment if not already pending
@@ -728,7 +797,7 @@ def flow_returning_customer() -> None:
                 print_info("Payment cancelled. Journey saved.")
                 return
             pay_resp = safe_call(
-                api.create_payment, transaction_id, user_id, amount, token,
+                api.create_payment, transaction_id, user_id, amount,
                 action="Creating payment session",
             )
             if not pay_resp:
@@ -737,15 +806,26 @@ def flow_returning_customer() -> None:
                 pay_resp.get("payment_reference") or pay_resp.get("reference") or pay_resp.get("id")
             )
             print_success(f"Payment created. Reference: [bold]{pay_ref}[/bold]")
+        elif not pay_ref:
+            pay_ref = ask("Enter the existing payment reference to continue", default="").strip()
+            if not pay_ref:
+                print_error("Payment reference is required to continue a pending payment journey.")
+                return
 
         # Payment OTP
         print_step(7, "Confirm Payment via OTP")
-        safe_call(api.send_payment_otp, pay_ref, token, action="Sending payment OTP")
+        send_otp_resp = safe_call(
+            api.send_payment_otp,
+            pay_ref,
+            action="Sending payment OTP",
+        )
+        if not send_otp_resp:
+            return
         print_success("Payment OTP sent! (Mock OTP - check backend logs for the code)")
 
         pay_otp = ask("Enter Payment OTP")
         verify_resp = safe_call(
-            api.verify_payment_otp, transaction_id, pay_ref, pay_otp, token,
+            api.verify_payment_otp, transaction_id, pay_ref, pay_otp,
             action="Verifying payment OTP",
         )
         if not verify_resp:
@@ -756,10 +836,7 @@ def flow_returning_customer() -> None:
         print_step(8, "Your Policy")
         p_resp = safe_call(api.list_user_policies, user_id, token, action="Fetching policy")
         if p_resp:
-            pols = (
-                p_resp.get("policies") or p_resp.get("data")
-                or (p_resp if isinstance(p_resp, list) else [])
-            )
+            pols = extract_items(p_resp)
             if pols:
                 display_policy(pols[-1])
 

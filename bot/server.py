@@ -21,11 +21,10 @@ import asyncio
 import json
 import uuid
 
-import httpx
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from groq import AsyncGroq
+from groq import APIConnectionError, APIStatusError, AsyncGroq
 from loguru import logger
 from pydantic import BaseModel
 
@@ -34,7 +33,7 @@ from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 
 from config import config
 from system_prompt import SYSTEM_PROMPT
-from mcp_client import TOOLS
+from mcp_client import TOOLS, call_mcp_tool
 from chatbot import run_chatbot
 from voicebot import run_voicebot
 
@@ -142,59 +141,66 @@ async def chat_endpoint(req: ChatRequest):
 
     # Agentic loop — handles multi-step tool calling
     max_rounds = 6
-    for _round in range(max_rounds):
-        response = await client.chat.completions.create(
-            model=config.groq_model,
-            messages=history,
-            tools=TOOLS,
-            tool_choice="auto",
-        )
+    try:
+        for _round in range(max_rounds):
+            response = await client.chat.completions.create(
+                model=config.groq_model,
+                messages=history,
+                tools=TOOLS,
+                tool_choice="auto",
+            )
 
-        message = response.choices[0].message
-        history.append(message.model_dump(exclude_none=True))
+            message = response.choices[0].message
+            history.append(message.model_dump(exclude_none=True))
 
-        if not message.tool_calls:
-            # Final text response — done
-            break
+            if not message.tool_calls:
+                # Final text response — done
+                break
 
-        # Execute each tool call and feed result back
-        for tool_call in message.tool_calls:
-            tool_name = tool_call.function.name
-            try:
-                arguments = json.loads(tool_call.function.arguments)
-            except Exception:
-                arguments = {}
+            # Execute each tool call and feed result back
+            for tool_call in message.tool_calls:
+                tool_name = tool_call.function.name
+                try:
+                    arguments = json.loads(tool_call.function.arguments)
+                except Exception:
+                    arguments = {}
 
-            logger.info(f"Chat tool call: {tool_name}({arguments})")
-            tool_result = await _call_mcp_tool(tool_name, arguments)
+                logger.info(f"Chat tool call: {tool_name}({arguments})")
+                tool_result = await call_mcp_tool(tool_name, arguments)
 
-            history.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content": json.dumps(tool_result),
-            })
+                history.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(tool_result),
+                })
+    except APIConnectionError as error:
+        logger.error(f"Groq connection error: {error}")
+        return {
+            "session_id": session_id,
+            "reply": (
+                "I couldn't reach the language service right now. "
+                "Please check the internet connection and try again."
+            ),
+        }
+    except APIStatusError as error:
+        logger.error(f"Groq API status error: {error}")
+        return {
+            "session_id": session_id,
+            "reply": (
+                "The language service returned an error right now. "
+                "Please try again in a moment."
+            ),
+        }
+    except Exception as error:
+        logger.error(f"Unexpected chat processing error: {error}")
+        return {
+            "session_id": session_id,
+            "reply": "Something went wrong while processing your request. Please try again.",
+        }
 
     reply = message.content or "Sorry, I couldn't generate a response. Please try again."
     logger.info(f"Chat reply [{session_id}]: {reply[:80]}...")
     return {"session_id": session_id, "reply": reply}
-
-
-async def _call_mcp_tool(tool_name: str, arguments: dict) -> dict:
-    """Call MCP server and return result. Used by the REST chat endpoint."""
-    payload = {
-        "jsonrpc": "2.0",
-        "method": "tools/call",
-        "id": 1,
-        "params": {"name": tool_name, "arguments": arguments},
-    }
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(config.mcp_server_url, json=payload)
-            resp.raise_for_status()
-            return resp.json().get("result", {})
-    except Exception as e:
-        logger.error(f"MCP tool '{tool_name}' error: {e}")
-        return {"error": "Could not reach the insurance backend. Please try again."}
 
 
 # ── Chatbot Endpoint ──────────────────────────────────────────────────────────
@@ -204,7 +210,7 @@ async def chatbot_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for text chatbot.
 
-    Browser connects to:  ws://localhost:8001/chat
+    Browser connects to:  ws://localhost:8002/chat
 
     Each browser connection gets its own independent Pipecat pipeline.
     The pipeline runs for the lifetime of the WebSocket connection.
@@ -231,7 +237,7 @@ async def voice_offer(offer: RTCOffer):
     """
     WebRTC offer endpoint for voice bot.
 
-    Browser sends SDP offer to:  POST http://localhost:8001/voice/offer
+    Browser sends SDP offer to:  POST http://localhost:8002/voice/offer
     Server returns SDP answer.
     After handshake completes, audio streams flow via WebRTC.
 
@@ -249,13 +255,17 @@ async def voice_offer(offer: RTCOffer):
         # Create a new WebRTC connection for this session
         connection = SmallWebRTCConnection()
 
-        # Process the browser's SDP offer and generate our answer
-        answer = await connection.initialize(
-            offer={"sdp": offer.sdp, "type": offer.type}
-        )
+        # Process the browser's SDP offer and generate our answer.
+        await connection.initialize(offer.sdp, offer.type)
+        answer = connection.get_answer()
+        if answer is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Voice bot failed to generate an SDP answer.",
+            )
 
-        # Store connection with its session ID for ICE candidate routing
-        session_id = connection.session_id
+        # Store connection with a stable session identifier for ICE candidate routing.
+        session_id = str(answer["pc_id"])
         _voice_connections[session_id] = connection
 
         # Start the voice bot pipeline in background
@@ -271,9 +281,15 @@ async def voice_offer(offer: RTCOffer):
             "session_id": session_id,
         }
 
+    except HTTPException as error:
+        logger.error(f"Voice offer failed: {error.detail}")
+        raise error
     except Exception as e:
         logger.error(f"Voice offer failed: {e}")
-        return {"error": str(e)}, 500
+        raise HTTPException(
+            status_code=500,
+            detail=f"Voice offer failed: {e}",
+        ) from e
 
 
 @app.post("/voice/ice")
@@ -281,14 +297,14 @@ async def voice_ice(body: dict):
     """
     ICE candidate endpoint for voice bot WebRTC.
 
-    Browser sends ICE candidates to:  POST http://localhost:8001/voice/ice
+    Browser sends ICE candidates to:  POST http://localhost:8002/voice/ice
     These help the browser and server find the best network path for audio.
     """
     session_id = body.get("session_id")
     candidate = body.get("candidate")
 
     if not session_id or session_id not in _voice_connections:
-        return {"error": "Session not found"}, 404
+        raise HTTPException(status_code=404, detail="Session not found")
 
     connection = _voice_connections[session_id]
     await connection.add_ice_candidate(candidate)

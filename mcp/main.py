@@ -47,6 +47,11 @@ from tools.customer_tools import (
     send_login_otp,
     verify_login_otp,
 )
+from tools.prompt_tools import (
+    new_insurance_journey_prompt,
+    returning_customer_prompt,
+    resume_incomplete_journey_prompt,
+)
 
 # ---------------------------------------------------------------------------
 # MCP server instance
@@ -251,14 +256,17 @@ async def tool_verify_payment_otp(
 
 
 @mcp.tool()
-async def tool_get_payment_status(payment_reference: str) -> dict:
+async def tool_get_payment_status(payment_reference: str, token: str) -> dict:
     """Check the current status of a payment by its reference.
+
+    Requires the customer JWT token (from verify_login_otp) because the
+    backend restricts this endpoint to the payment owner or an admin.
 
     Useful for confirming whether payment succeeded or failed before
     attempting to fetch the policy.
     """
 
-    return await get_payment_status(payment_reference=payment_reference)
+    return await get_payment_status(payment_reference=payment_reference, token=token)
 
 
 @mcp.tool()
@@ -346,6 +354,47 @@ async def tool_list_user_policies(user_id: str, token: str) -> dict:
     """
 
     return await list_user_policies(user_id=user_id, token=token)
+
+
+# ---------------------------------------------------------------------------
+# Prompts — conversation starters for MCP-compatible clients
+# ---------------------------------------------------------------------------
+
+
+@mcp.prompt()
+def prompt_new_insurance_journey() -> str:
+    """Start a new insurance purchase journey from scratch.
+
+    Guides the AI to collect customer details, submit the form,
+    display quotes, select a plan and add-ons, process payment,
+    and retrieve the issued policy — end to end.
+    """
+
+    return new_insurance_journey_prompt()
+
+
+@mcp.prompt()
+def prompt_returning_customer() -> str:
+    """Log in a returning customer and help them with their account.
+
+    Guides the AI to authenticate the customer via OTP and then
+    let them view their policies, view past transactions, or
+    resume an incomplete insurance purchase.
+    """
+
+    return returning_customer_prompt()
+
+
+@mcp.prompt()
+def prompt_resume_incomplete_journey() -> str:
+    """Resume an insurance purchase that was left incomplete.
+
+    Guides the AI to log in the customer, find their latest
+    incomplete journey, and resume from exactly where they left off
+    without starting the entire process over again.
+    """
+
+    return resume_incomplete_journey_prompt()
 
 
 # ---------------------------------------------------------------------------

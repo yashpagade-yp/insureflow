@@ -139,14 +139,15 @@ async def verify_payment_otp(
     return response.json()
 
 
-async def get_payment_status(payment_reference: str) -> dict:
+async def get_payment_status(payment_reference: str, token: str) -> dict:
     """Check the current status of a payment by its reference.
 
-    Useful for polling after OTP verification to confirm the payment
-    outcome before fetching the policy.
+    Requires a valid customer JWT token — the backend enforces ownership
+    so only the payment owner or an admin can view this status.
 
     Args:
         payment_reference: The payment reference to check.
+        token: The customer JWT token obtained after login OTP verification.
 
     Returns:
         dict containing transaction_id, payment_reference, payment_status,
@@ -159,6 +160,7 @@ async def get_payment_status(payment_reference: str) -> dict:
     async with httpx.AsyncClient() as client:
         response = await client.get(
             f"{MAIN_BACKEND_URL}/v1/payments/{payment_reference}/status",
+            headers={"Authorization": f"Bearer {token}"},
             timeout=30.0,
         )
 
