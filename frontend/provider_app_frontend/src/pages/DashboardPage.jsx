@@ -3,7 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import EmptyState from "../components/EmptyState";
 import SectionCard from "../components/SectionCard";
 import StatCard from "../components/StatCard";
-import { listCompanies, listPayments, listPlans, listQuotes } from "../lib/api";
+import {
+  listBuyerCompanies,
+  listPayments,
+  listPlans,
+  listProviderCompanies,
+  listQuotes,
+} from "../lib/api";
 
 function DashboardPage() {
   const [companies, setCompanies] = useState([]);
@@ -19,15 +25,19 @@ function DashboardPage() {
       setErrorMessage("");
 
       try {
-        const [companyResponse, planResponse, quoteResponse, paymentResponse] =
+        const [buyerResponse, providerResponse, planResponse, quoteResponse, paymentResponse] =
           await Promise.all([
-            listCompanies(),
+            listBuyerCompanies(),
+            listProviderCompanies(),
             listPlans(),
             listQuotes(),
             listPayments(),
           ]);
 
-        setCompanies(companyResponse.items ?? []);
+        setCompanies([
+          ...(buyerResponse.items ?? []),
+          ...(providerResponse.items ?? []),
+        ]);
         setPlans(planResponse.items ?? []);
         setQuotes(quoteResponse.items ?? []);
         setPayments(paymentResponse.items ?? []);
@@ -43,8 +53,8 @@ function DashboardPage() {
 
   const dashboardStats = useMemo(() => {
     const activeCompanies = companies.filter((item) => item.is_active).length;
-    const mediatorCompanies = companies.filter(
-      (item) => item.company_type === "mediator"
+    const buyerCompanies = companies.filter(
+      (item) => item.company_type === "buyer"
     ).length;
     const providerCompanies = companies.filter(
       (item) => item.company_type === "provider"
@@ -54,7 +64,12 @@ function DashboardPage() {
       {
         label: "Registered companies",
         value: companies.length,
-        helper: `${activeCompanies} active across mediator and provider roles`,
+        helper: `${activeCompanies} active across buyer and provider roles`,
+      },
+      {
+        label: "Buyer companies",
+        value: buyerCompanies,
+        helper: "Mediator and buyer companies registered for API communication",
       },
       {
         label: "Provider companies",
@@ -119,7 +134,7 @@ function DashboardPage() {
       </SectionCard>
 
       <div className="content-grid">
-        <SectionCard title="Recent companies" subtitle="Mediator and provider registrations from the backend.">
+        <SectionCard title="Recent companies" subtitle="Buyer-company and provider-company registrations from the backend.">
           {isLoading ? (
             <p className="muted-copy">Loading companies...</p>
           ) : companies.length === 0 ? (

@@ -54,20 +54,44 @@ export function providerAdminVerifyOtp(payload) {
   return unwrapRequest(providerApi.post("/v1/provider-auth/verify-otp", payload));
 }
 
-export function listCompanies() {
-  return unwrapRequest(providerApi.get("/v1/companies"));
+export function listBuyerCompanies() {
+  return unwrapRequest(providerApi.get("/v1/buyer-companies"));
 }
 
-export function createCompany(payload) {
-  return unwrapRequest(providerApi.post("/v1/companies", payload));
+export function createBuyerCompany(payload) {
+  return unwrapRequest(providerApi.post("/v1/buyer-companies", payload));
 }
 
-export function getCompany(companyId) {
-  return unwrapRequest(providerApi.get(`/v1/companies/${companyId}`));
+export function getBuyerCompany(companyId) {
+  return unwrapRequest(providerApi.get(`/v1/buyer-companies/${companyId}`));
 }
 
-export function updateCompany(companyId, payload) {
-  return unwrapRequest(providerApi.patch(`/v1/companies/${companyId}`, payload));
+export function updateBuyerCompany(companyId, payload) {
+  return unwrapRequest(providerApi.patch(`/v1/buyer-companies/${companyId}`, payload));
+}
+
+export function listProviderCompanies() {
+  return unwrapRequest(providerApi.get("/v1/provider-companies"));
+}
+
+export function createProviderCompany(payload) {
+  return unwrapRequest(providerApi.post("/v1/provider-companies", payload));
+}
+
+export function getProviderCompany(companyId) {
+  return unwrapRequest(providerApi.get(`/v1/provider-companies/${companyId}`));
+}
+
+export function updateProviderCompany(companyId, payload) {
+  return unwrapRequest(providerApi.patch(`/v1/provider-companies/${companyId}`, payload));
+}
+
+export function activateProviderCompany(companyId) {
+  return unwrapRequest(providerApi.post(`/v1/provider-companies/${companyId}/activate`));
+}
+
+export function deactivateProviderCompany(companyId) {
+  return unwrapRequest(providerApi.post(`/v1/provider-companies/${companyId}/deactivate`));
 }
 
 export function listPlans() {

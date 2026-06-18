@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import EmptyState from "../components/EmptyState";
 import SectionCard from "../components/SectionCard";
-import { createPlan, listCompanies, listPlans } from "../lib/api";
+import { createPlan, listPlans, listProviderCompanies } from "../lib/api";
 
 const initialAddOn = {
   name: "",
@@ -42,12 +42,10 @@ function PlansPage() {
       try {
         const [plansResponse, companiesResponse] = await Promise.all([
           listPlans(),
-          listCompanies(),
+          listProviderCompanies(),
         ]);
 
-        const providers = (companiesResponse.items ?? []).filter(
-          (item) => item.company_type === "provider"
-        );
+        const providers = companiesResponse.items ?? [];
 
         setPlans(plansResponse.items ?? []);
         setProviderCompanies(providers);

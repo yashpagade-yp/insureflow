@@ -11,8 +11,11 @@ class CompanyResponse(BaseModel):
     """Represents one registered company returned by the provider backend.
 
     Attributes:
+        id: ODMantic object id as string.
+        company_code: Unique business-facing company code.
         company_name: Unique company name.
         company_type: Registered company type.
+        contact_person_name: Optional company contact person.
         contact_email: Optional company contact email.
         contact_phone: Optional company contact phone.
         is_active: Whether the company is active.
@@ -20,8 +23,14 @@ class CompanyResponse(BaseModel):
         updated_at: Company last-update timestamp.
     """
 
+    id: str = Field(..., description="ODMantic object id as string")
+    company_code: str = Field(..., description="Unique business-facing company code")
     company_name: str = Field(..., description="Unique company name")
     company_type: str = Field(..., description="Registered company type")
+    contact_person_name: str | None = Field(
+        default=None,
+        description="Optional company contact person",
+    )
     contact_email: str | None = Field(default=None, description="Optional company contact email")
     contact_phone: str | None = Field(default=None, description="Optional company contact phone")
     is_active: bool = Field(..., description="Whether the company is active")
@@ -37,14 +46,14 @@ class CompanyCreateResponse(BaseModel):
     Attributes:
         message: Human-readable response message.
         company: Registered company details.
-        plain_api_key: Plain API key returned one time during registration.
+        plain_api_key: Plain API key returned one time during buyer-company registration.
     """
 
     message: str = Field(..., description="Human-readable response message")
     company: CompanyResponse = Field(..., description="Registered company details")
-    plain_api_key: str = Field(
-        ...,
-        description="Plain API key returned one time during registration",
+    plain_api_key: str | None = Field(
+        default=None,
+        description="Plain API key returned one time during buyer-company registration",
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -60,5 +69,19 @@ class CompanyListResponse(BaseModel):
 
     items: list[CompanyResponse] = Field(default_factory=list, description="List of companies")
     total_count: int = Field(..., ge=0, description="Total number of returned companies")
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CompanyStatusResponse(BaseModel):
+    """Response payload returned after provider-company activation changes.
+
+    Attributes:
+        message: Human-readable status-change response message.
+        company: Updated provider-company details.
+    """
+
+    message: str = Field(..., description="Human-readable response message")
+    company: CompanyResponse = Field(..., description="Updated provider-company details")
 
     model_config = ConfigDict(extra="forbid")
