@@ -19,7 +19,7 @@ logging = logger(__name__)
 SMTP_HOST = os.environ.get("EMAIL_SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("EMAIL_SMTP_PORT", "587"))
 EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")
-EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD") or os.environ.get("AAP_PASSWORD")
 EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "InsureFlow")
 
 
