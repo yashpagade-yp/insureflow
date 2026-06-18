@@ -133,7 +133,8 @@ This admin flow is separate from the provider admin flow.
 | Verify admin OTP              | main_backend    | `POST /v1/admins/login/verify`                  | None     |
 | List plans (for quotes)       | provider_backend| `GET /v1/plans/`                                | None     |
 | Get plan detail               | provider_backend| `GET /v1/plans/{plan_id}`                       | None     |
-| List companies                | provider_backend| `GET /v1/companies/`                            | None     |
+| List buyer companies          | provider_backend| `GET /v1/buyer-companies/`                      | Admin JWT|
+| List provider companies       | provider_backend| `GET /v1/provider-companies/`                   | Admin JWT|
 
 ---
 

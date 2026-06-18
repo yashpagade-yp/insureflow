@@ -1,7 +1,7 @@
 """Company models for the InsureFlow provider backend.
 
 This module contains the provider-side company document model used to register
-insurance provider companies and mediator companies for controlled API access.
+insurance provider companies and buyer companies for controlled API access.
 """
 
 from __future__ import annotations
@@ -26,19 +26,21 @@ class CompanyType(str, Enum):
 
     Attributes:
         PROVIDER: Insurance provider company offering plans.
-        MEDIATOR: Mediator platform such as InsureFlow.
+        BUYER: Buyer or mediator company such as InsureFlow.
+        MEDIATOR: Legacy mediator alias kept for existing stored records.
     """
 
     PROVIDER = "provider"
+    BUYER = "buyer"
     MEDIATOR = "mediator"
 
 
 class Company(Model):
     """Represents a registered company stored in the `companies` collection.
 
-    The company model is used to onboard provider companies and the InsureFlow
-    broker/mediator entry. In the current project flow, these company records
-    are created and managed only by admin users in the provider backend.
+    The company model is used to onboard provider companies and buyer
+    companies. In the current project flow, these company records are created
+    and managed only by admin users in the provider backend.
 
     Attributes:
         company_code: Unique business-facing company code.

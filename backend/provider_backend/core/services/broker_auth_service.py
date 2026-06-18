@@ -1,4 +1,4 @@
-"""Broker and API-key validation helpers for provider-backend integrations."""
+"""Buyer-company API-key validation helpers for provider-backend integrations."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ logging = logger(__name__)
 
 
 class BrokerAuthService:
-    """Validates mediator/broker API keys for inter-backend requests."""
+    """Validates buyer-company API keys for inter-backend requests."""
 
     def __init__(self) -> None:
         """Initialise the service with its CRUD dependency."""
@@ -23,7 +23,7 @@ class BrokerAuthService:
         self.company_crud = CompanyCrud()
 
     async def validate_api_key(self, api_key: str) -> CompanyModel:
-        """Validate an incoming plain API key against registered mediator companies."""
+        """Validate an incoming plain API key against registered buyer companies."""
 
         normalized_api_key = api_key.strip()
         if normalized_api_key.startswith("Bearer "):
@@ -45,28 +45,28 @@ class BrokerAuthService:
                 detail="Invalid provider integration API key.",
             )
 
-        if company.company_type != CompanyType.MEDIATOR:
+        if company.company_type not in [CompanyType.BUYER, CompanyType.MEDIATOR]:
             logging.warning(
-                "Company %s attempted integration access with non-mediator API key",
+                "Company %s attempted integration access with non-buyer API key",
                 company.company_name,
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="This API key is not permitted for broker integration access.",
+                detail="This API key is not permitted for buyer-company integration access.",
             )
 
         if not company.is_active:
             logging.warning(
-                "Inactive mediator company %s attempted integration access",
+                "Inactive buyer company %s attempted integration access",
                 company.company_name,
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="This broker integration is inactive.",
+                detail="This buyer-company integration is inactive.",
             )
 
         logging.info(
-            "Broker API key validated successfully for company %s",
+            "Buyer-company API key validated successfully for company %s",
             company.company_name,
         )
         return company

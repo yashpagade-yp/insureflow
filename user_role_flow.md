@@ -151,15 +151,18 @@ automatically receive provider-side access.
 
 Inside the provider admin dashboard, the admin can:
 
-1. register provider insurance companies
-2. create insurance plans under provider companies
-3. add separate optional add-ons to plans where applicable
-4. manage plans where some companies or plans have add-ons and some do not
-5. view provider-side registered companies
-6. view published plans
-7. ensure proper provider-side setup and integration configuration
-8. monitor provider-side quote and payment records if those views are exposed
-   in the dashboard
+1. create and register buyer companies
+2. create and register provider insurance companies
+3. keep buyer companies and provider companies in separate dashboard sections
+4. create insurance plans under provider companies
+5. add separate optional add-ons to plans where applicable
+6. manage plans where some companies or plans have add-ons and some do not
+7. activate provider insurance companies
+8. deactivate provider insurance companies
+9. ensure proper API-key-based communication between buyer companies and
+   provider companies
+10. monitor provider-side quote and payment records if those views are exposed
+    in the dashboard
 
 ### Provider-Side Role Rules
 
@@ -169,12 +172,14 @@ Inside the provider admin dashboard, the admin can:
 4. This admin controls provider-side setup, onboarding, and management.
 5. This admin is separate from the customer-app admin.
 6. Buyer-to-provider communication should happen through API keys.
+7. Activate/deactivate authority belongs to the provider admin for provider
+   insurance companies.
 
 ### Provider Admin Flow Summary
 
 The provider admin logs in with email, password, and OTP, then manages
-provider companies, plans, add-ons, and provider-side insurance
-configuration.
+buyer companies, provider companies, plans, add-ons, provider-company
+activation status, and provider-side insurance configuration.
 
 The provider admin is separate from the customer-app admin and should not
 automatically receive customer-side access.
@@ -208,10 +213,11 @@ The customer-app admin role exists in the main platform and is used for:
 
 The provider admin role exists in the provider platform and is used for:
 
-1. insurer onboarding
-2. provider-side setup and configuration
-3. plan and add-on management
-4. provider-side administration only
+1. buyer-company onboarding
+2. provider-company onboarding
+3. provider-company activation and deactivation
+4. plan and add-on management
+5. provider-side administration only
 
 ## 5. Final Simple Summary
 
@@ -220,7 +226,8 @@ InsureFlow has two main operational sides:
 - the customer side, where customers complete insurance journeys and customer
   admins monitor them and resolve tickets raised by customers
 - the provider side, where the provider admin configures provider companies,
-  plans, add-ons, and provider-side setup
+  buyer companies, plans, add-ons, provider-company status, and provider-side
+  setup
 
 These two admin flows are separate. A customer-app admin belongs only to the
 main/customer side, and a provider admin belongs only to the provider side.

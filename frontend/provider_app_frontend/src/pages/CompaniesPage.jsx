@@ -3,7 +3,21 @@ import { useEffect, useMemo, useState } from "react";
 import EmptyState from "../components/EmptyState";
 import SectionCard from "../components/SectionCard";
 import { useAuth } from "../context/AuthContext";
-import { createCompany, listCompanies } from "../lib/api";
+import {
+  activateProviderCompany,
+  createBuyerCompany,
+  createProviderCompany,
+  deactivateProviderCompany,
+  listBuyerCompanies,
+  listProviderCompanies,
+} from "../lib/api";
+
+const buyerInitialState = {
+  company_name: "",
+  contact_person_name: "",
+  contact_email: "",
+  contact_phone: "",
+};
 
 const providerInitialState = {
   company_name: "",
@@ -12,32 +26,23 @@ const providerInitialState = {
   contact_phone: "",
 };
 
-const mediatorContactInitialState = {
-  contact_person_name: "",
-  contact_email: "",
-  contact_phone: "",
-};
-
 function CompaniesPage() {
   const { auth } = useAuth();
-  const [companies, setCompanies] = useState([]);
+  const [buyerCompanies, setBuyerCompanies] = useState([]);
+  const [providerCompanies, setProviderCompanies] = useState([]);
   const [latestApiKey, setLatestApiKey] = useState("");
   const [copied, setCopied] = useState(false);
   const [formStatus, setFormStatus] = useState({ type: "", message: "" });
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmittingMediator, setIsSubmittingMediator] = useState(false);
+  const [isSubmittingBuyer, setIsSubmittingBuyer] = useState(false);
   const [isSubmittingProvider, setIsSubmittingProvider] = useState(false);
-  const [mediatorContact, setMediatorContact] = useState(mediatorContactInitialState);
+  const [buyerFormState, setBuyerFormState] = useState(buyerInitialState);
   const [providerFormState, setProviderFormState] = useState(providerInitialState);
+  const [statusActionByCompanyId, setStatusActionByCompanyId] = useState({});
 
-  const mediatorCompany = useMemo(
-    () => companies.find((c) => c.company_type === "mediator"),
-    [companies]
-  );
-
-  const providerCompanies = useMemo(
-    () => companies.filter((c) => c.company_type === "provider"),
-    [companies]
+  const allCompanies = useMemo(
+    () => [...buyerCompanies, ...providerCompanies],
+    [buyerCompanies, providerCompanies]
   );
 
   useEffect(() => {
@@ -47,8 +52,12 @@ function CompaniesPage() {
   async function loadCompanies() {
     setIsLoading(true);
     try {
-      const response = await listCompanies();
-      setCompanies(response.items ?? []);
+      const [buyerResponse, providerResponse] = await Promise.all([
+        listBuyerCompanies(),
+        listProviderCompanies(),
+      ]);
+      setBuyerCompanies(buyerResponse.items ?? []);
+      setProviderCompanies(providerResponse.items ?? []);
     } catch (error) {
       setFormStatus({ type: "error", message: error.message });
     } finally {
@@ -56,54 +65,51 @@ function CompaniesPage() {
     }
   }
 
-  function handleMediatorContactChange(event) {
+  function handleBuyerChange(event) {
     const { name, value } = event.target;
-    setMediatorContact((s) => ({ ...s, [name]: value }));
+    setBuyerFormState((state) => ({ ...state, [name]: value }));
   }
 
   function handleProviderChange(event) {
     const { name, value } = event.target;
-    setProviderFormState((s) => ({ ...s, [name]: value }));
+    setProviderFormState((state) => ({ ...state, [name]: value }));
   }
 
-  async function handleRegisterMediator(event) {
+  async function handleCreateBuyerCompany(event) {
     event.preventDefault();
     setFormStatus({ type: "", message: "" });
-    setIsSubmittingMediator(true);
+    setIsSubmittingBuyer(true);
     try {
-      const response = await createCompany({
-        company_name: "InsureFlow",
-        company_type: "mediator",
+      const response = await createBuyerCompany({
+        ...buyerFormState,
         created_by_admin_id: auth.adminId,
-        ...mediatorContact,
       });
-      setLatestApiKey(response.plain_api_key);
+      setLatestApiKey(response.plain_api_key ?? "");
       setFormStatus({
         type: "success",
-        message: "InsureFlow registered as mediator. Copy the API key below.",
+        message: `${response.company.company_name} created as a buyer company. Copy the API key below now.`,
       });
-      setMediatorContact(mediatorContactInitialState);
+      setBuyerFormState(buyerInitialState);
       await loadCompanies();
     } catch (error) {
       setFormStatus({ type: "error", message: error.message });
     } finally {
-      setIsSubmittingMediator(false);
+      setIsSubmittingBuyer(false);
     }
   }
 
-  async function handleCreateProvider(event) {
+  async function handleCreateProviderCompany(event) {
     event.preventDefault();
     setFormStatus({ type: "", message: "" });
     setIsSubmittingProvider(true);
     try {
-      const response = await createCompany({
+      const response = await createProviderCompany({
         ...providerFormState,
-        company_type: "provider",
         created_by_admin_id: auth.adminId,
       });
       setFormStatus({
         type: "success",
-        message: `${response.company.company_name} registered as provider.`,
+        message: `${response.company.company_name} created as a provider company.`,
       });
       setProviderFormState(providerInitialState);
       await loadCompanies();
@@ -114,24 +120,47 @@ function CompaniesPage() {
     }
   }
 
+  async function handleProviderStatusChange(companyId, shouldActivate) {
+    setFormStatus({ type: "", message: "" });
+    setStatusActionByCompanyId((state) => ({ ...state, [companyId]: true }));
+    try {
+      const response = shouldActivate
+        ? await activateProviderCompany(companyId)
+        : await deactivateProviderCompany(companyId);
+      setFormStatus({
+        type: "success",
+        message: response.message,
+      });
+      await loadCompanies();
+    } catch (error) {
+      setFormStatus({ type: "error", message: error.message });
+    } finally {
+      setStatusActionByCompanyId((state) => ({ ...state, [companyId]: false }));
+    }
+  }
+
   return (
     <div className="page-stack">
       {formStatus.message ? (
-        <div className={formStatus.type === "error" ? "alert-box alert-error" : "alert-box alert-success"}>
+        <div
+          className={
+            formStatus.type === "error"
+              ? "alert-box alert-error"
+              : "alert-box alert-success"
+          }
+        >
           {formStatus.message}
         </div>
       ) : null}
 
-      {/* ── One-time API key banner ──────────────────────────────────────── */}
       {latestApiKey ? (
         <div className="api-key-banner">
-          <p className="eyebrow-text">⚠ One-time API key — copy now</p>
-          <h3>InsureFlow Mediator API Key</h3>
+          <p className="eyebrow-text">One-time API key</p>
+          <h3>Buyer company API key</h3>
           <code>{latestApiKey}</code>
           <p className="muted-copy" style={{ marginTop: "0.6rem" }}>
-            This key is shown <strong>only once</strong>. Paste it into the
-            main backend <code>.env</code> as <code>INSUREFLOW_API_KEY</code>{" "}
-            to enable broker-to-provider communication.
+            This key is shown only once. Copy it now and store it in the buyer
+            company system that will call provider-side APIs.
           </p>
           <button
             type="button"
@@ -143,100 +172,82 @@ function CompaniesPage() {
               setTimeout(() => setCopied(false), 2500);
             }}
           >
-            {copied ? "✓ Copied!" : "Copy API key"}
+            {copied ? "Copied" : "Copy API key"}
           </button>
         </div>
       ) : null}
 
       <div className="content-grid content-grid-wide">
-        {/* ── Section 1: Register InsureFlow as Mediator (one-time) ────── */}
         <SectionCard
-          title="Register InsureFlow as Mediator"
-          subtitle="One-time setup. Links the InsureFlow platform as the broker mediator and generates the API key for provider communication."
+          title="Create Buyer Company"
+          subtitle="Create and register buyer or mediator companies that will communicate with provider-side APIs through their API keys."
         >
-          {mediatorCompany ? (
-            <div className="already-registered-box">
-              <span className="registered-icon">✓</span>
-              <div>
-                <p className="registered-title">InsureFlow is already registered</p>
-                <p className="muted-copy" style={{ margin: 0, fontSize: "0.88rem" }}>
-                  Status: <strong>{mediatorCompany.is_active ? "Active" : "Inactive"}</strong>
-                  {mediatorCompany.contact_email ? ` · ${mediatorCompany.contact_email}` : ""}
-                </p>
-                <p className="muted-copy" style={{ margin: "0.4rem 0 0", fontSize: "0.85rem" }}>
-                  The API key was shown once at registration. If you need a new key,
-                  contact your system administrator.
-                </p>
-              </div>
+          <form className="form-grid" onSubmit={handleCreateBuyerCompany}>
+            <label className="field-label field-span-full">
+              <span>Buyer company name</span>
+              <input
+                className="field-input"
+                name="company_name"
+                value={buyerFormState.company_name}
+                onChange={handleBuyerChange}
+                placeholder="e.g. InsureFlow"
+                required
+              />
+            </label>
+
+            <label className="field-label">
+              <span>Owner / contact person <span className="optional-tag">optional</span></span>
+              <input
+                className="field-input"
+                name="contact_person_name"
+                value={buyerFormState.contact_person_name}
+                onChange={handleBuyerChange}
+                placeholder="e.g. Platform admin"
+              />
+            </label>
+
+            <label className="field-label">
+              <span>Company email <span className="optional-tag">optional</span></span>
+              <input
+                className="field-input"
+                type="email"
+                name="contact_email"
+                value={buyerFormState.contact_email}
+                onChange={handleBuyerChange}
+                placeholder="buyer@example.com"
+              />
+            </label>
+
+            <label className="field-label">
+              <span>Company phone <span className="optional-tag">optional</span></span>
+              <input
+                className="field-input"
+                name="contact_phone"
+                value={buyerFormState.contact_phone}
+                onChange={handleBuyerChange}
+                placeholder="9999999999"
+              />
+            </label>
+
+            <div className="field-span-full">
+              <button
+                className="primary-button"
+                type="submit"
+                disabled={isSubmittingBuyer}
+              >
+                {isSubmittingBuyer ? "Creating..." : "Create buyer company"}
+              </button>
             </div>
-          ) : (
-            <form className="form-grid" onSubmit={handleRegisterMediator}>
-              <div className="field-label field-span-full">
-                <span>Mediator company name</span>
-                <input
-                  className="field-input field-input-locked"
-                  value="InsureFlow"
-                  readOnly
-                  title="The mediator company is always InsureFlow"
-                />
-                <p className="field-hint">Pre-set — InsureFlow is the platform mediator.</p>
-              </div>
-
-              <label className="field-label">
-                <span>Company person <span className="optional-tag">optional</span></span>
-                <input
-                  className="field-input"
-                  name="contact_person_name"
-                  value={mediatorContact.contact_person_name}
-                  onChange={handleMediatorContactChange}
-                  placeholder="e.g. Platform admin"
-                />
-              </label>
-
-              <label className="field-label">
-                <span>Company email <span className="optional-tag">optional</span></span>
-                <input
-                  className="field-input"
-                  type="email"
-                  name="contact_email"
-                  value={mediatorContact.contact_email}
-                  onChange={handleMediatorContactChange}
-                  placeholder="platform@insureflow.in"
-                />
-              </label>
-
-              <label className="field-label">
-                <span>Company phone <span className="optional-tag">optional</span></span>
-                <input
-                  className="field-input"
-                  name="contact_phone"
-                  value={mediatorContact.contact_phone}
-                  onChange={handleMediatorContactChange}
-                  placeholder="9999999999"
-                />
-              </label>
-
-              <div className="field-span-full">
-                <button
-                  className="primary-button"
-                  type="submit"
-                  disabled={isSubmittingMediator}
-                >
-                  {isSubmittingMediator ? "Registering…" : "Register InsureFlow & get API key"}
-                </button>
-              </div>
-            </form>
-          )}
+          </form>
         </SectionCard>
 
-        {/* ── Section 2: Register Provider Insurance Company ─────────── */}
         <SectionCard
-          title="Register Insurance Provider"
-          subtitle="Add an insurance company (e.g. Star Health, HDFC ERGO) to publish plans under."
+          title="Create Provider Company"
+          subtitle="Create insurance provider companies that can publish plans and be activated or deactivated by the provider admin."
         >
-          <form className="form-grid" onSubmit={handleCreateProvider}>
+          <form className="form-grid" onSubmit={handleCreateProviderCompany}>
             <label className="field-label field-span-full">
-              <span>Company name</span>
+              <span>Provider company name</span>
               <input
                 className="field-input"
                 name="company_name"
@@ -248,7 +259,7 @@ function CompaniesPage() {
             </label>
 
             <label className="field-label">
-              <span>Company person <span className="optional-tag">optional</span></span>
+              <span>Owner / contact person <span className="optional-tag">optional</span></span>
               <input
                 className="field-input"
                 name="contact_person_name"
@@ -287,24 +298,23 @@ function CompaniesPage() {
                 type="submit"
                 disabled={isSubmittingProvider}
               >
-                {isSubmittingProvider ? "Registering…" : "Register provider company"}
+                {isSubmittingProvider ? "Creating..." : "Create provider company"}
               </button>
             </div>
           </form>
         </SectionCard>
       </div>
 
-      {/* ── All registered companies table ──────────────────────────── */}
       <SectionCard
-        title="Registered companies"
-        subtitle="All mediator and provider companies currently in the system."
+        title="Buyer Companies"
+        subtitle="Registered buyer or mediator companies that communicate with provider-side APIs using API keys."
       >
         {isLoading ? (
-          <p className="muted-copy">Loading companies…</p>
-        ) : companies.length === 0 ? (
+          <p className="muted-copy">Loading buyer companies...</p>
+        ) : buyerCompanies.length === 0 ? (
           <EmptyState
-            title="No companies yet"
-            description="Register InsureFlow as mediator first, then add provider companies."
+            title="No buyer companies yet"
+            description="Create the first buyer company to register it for provider-side API communication."
           />
         ) : (
           <div className="table-wrap">
@@ -312,25 +322,29 @@ function CompaniesPage() {
               <thead>
                 <tr>
                   <th>Company</th>
-                  <th>Role</th>
+                  <th>Code</th>
+                  <th>Contact person</th>
                   <th>Email</th>
                   <th>Phone</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {companies.map((company) => (
-                  <tr key={`${company.company_name}-${company.company_type}`}>
+                {buyerCompanies.map((company) => (
+                  <tr key={company.id}>
                     <td>{company.company_name}</td>
+                    <td>{company.company_code}</td>
+                    <td>{company.contact_person_name || "-"}</td>
+                    <td>{company.contact_email || "-"}</td>
+                    <td>{company.contact_phone || "-"}</td>
                     <td>
-                      <span className={company.company_type === "mediator" ? "role-pill role-mediator" : "role-pill role-provider"}>
-                        {company.company_type === "mediator" ? "Mediator" : "Provider"}
-                      </span>
-                    </td>
-                    <td>{company.contact_email || "—"}</td>
-                    <td>{company.contact_phone || "—"}</td>
-                    <td>
-                      <span className={company.is_active ? "status-pill status-active" : "status-pill"}>
+                      <span
+                        className={
+                          company.is_active
+                            ? "status-pill status-active"
+                            : "status-pill"
+                        }
+                      >
                         {company.is_active ? "Active" : "Inactive"}
                       </span>
                     </td>
@@ -342,21 +356,95 @@ function CompaniesPage() {
         )}
       </SectionCard>
 
-      {/* ── Provider companies ready for plans ──────────────────────── */}
-      {providerCompanies.length > 0 && (
-        <SectionCard
-          title="Provider companies available for plans"
-          subtitle="These insurers can be selected when creating insurance plans."
-        >
+      <SectionCard
+        title="Provider Companies"
+        subtitle="Provider-side insurance companies. The provider admin can activate or deactivate these companies."
+      >
+        {isLoading ? (
+          <p className="muted-copy">Loading provider companies...</p>
+        ) : providerCompanies.length === 0 ? (
+          <EmptyState
+            title="No provider companies yet"
+            description="Create the first provider insurance company to publish plans under it."
+          />
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Code</th>
+                  <th>Contact person</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {providerCompanies.map((company) => (
+                  <tr key={company.id}>
+                    <td>{company.company_name}</td>
+                    <td>{company.company_code}</td>
+                    <td>{company.contact_person_name || "-"}</td>
+                    <td>{company.contact_email || "-"}</td>
+                    <td>{company.contact_phone || "-"}</td>
+                    <td>
+                      <span
+                        className={
+                          company.is_active
+                            ? "status-pill status-active"
+                            : "status-pill"
+                        }
+                      >
+                        {company.is_active ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={Boolean(statusActionByCompanyId[company.id])}
+                        onClick={() =>
+                          handleProviderStatusChange(company.id, !company.is_active)
+                        }
+                      >
+                        {statusActionByCompanyId[company.id]
+                          ? "Saving..."
+                          : company.is_active
+                            ? "Deactivate"
+                            : "Activate"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title="All Companies"
+        subtitle="Combined provider-side view of buyer companies and provider companies."
+      >
+        {isLoading ? (
+          <p className="muted-copy">Loading companies...</p>
+        ) : allCompanies.length === 0 ? (
+          <EmptyState
+            title="No companies registered yet"
+            description="Create buyer companies and provider companies from the separate sections above."
+          />
+        ) : (
           <div className="chip-list">
-            {providerCompanies.map((company) => (
-              <span key={company.company_name} className="info-chip">
-                {company.company_name}
+            {allCompanies.map((company) => (
+              <span key={`${company.company_type}-${company.id}`} className="info-chip">
+                {company.company_name} · {company.company_type}
               </span>
             ))}
           </div>
-        </SectionCard>
-      )}
+        )}
+      </SectionCard>
     </div>
   );
 }

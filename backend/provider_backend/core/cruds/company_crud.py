@@ -9,7 +9,7 @@ from odmantic import ObjectId
 
 from commons.logger import logger
 from core.database.database import get_engine
-from core.models.company_model import CompanyModel
+from core.models.company_model import CompanyModel, CompanyType
 
 logging = logger(__name__)
 
@@ -78,6 +78,23 @@ class CompanyCrud:
             return sorted(companies, key=lambda item: item.created_at, reverse=True)
         except Exception as error:
             logging.error("Error in CompanyCrud.list_all function: %s", error)
+            raise
+
+    async def list_by_company_types(
+        self,
+        company_types: list[CompanyType],
+    ) -> list[CompanyModel]:
+        """Return all companies matching the requested company types."""
+
+        try:
+            logging.info("Executing CompanyCrud.list_by_company_types function")
+            companies = await self.engine.find(
+                CompanyModel,
+                CompanyModel.company_type.in_(company_types),
+            )
+            return sorted(companies, key=lambda item: item.created_at, reverse=True)
+        except Exception as error:
+            logging.error("Error in CompanyCrud.list_by_company_types function: %s", error)
             raise
 
     async def update(self, company: CompanyModel, updates: dict[str, Any]) -> CompanyModel:
