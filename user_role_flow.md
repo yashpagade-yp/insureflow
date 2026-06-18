@@ -104,13 +104,16 @@ an issue occurs.
 
 ### Entry Point
 
-1. The admin opens the customer-facing platform admin area.
-2. The admin logs in using email, password, and OTP.
-3. The admin OTP is real and is sent to the admin email.
+1. The customer-app admin opens the customer-facing platform admin area.
+2. The customer-app admin logs in using email, password, and OTP.
+3. The customer-app admin OTP is real and is sent to the admin email.
+4. This admin account belongs only to the `main_backend`.
+5. This login flow is separate from the provider-admin login flow.
 
 ### Admin Responsibilities
 
-After successful login, the admin can monitor and manage customer-side
+After successful login, the customer-app admin can monitor and manage
+customer-side
 operations such as:
 
 1. customer records
@@ -128,34 +131,35 @@ The customer-app admin is responsible for overseeing the customer journey side
 of the business, including users, transactions, forms, policies, support
 operations, ticket handling, and customer issue resolution.
 
+The customer-app admin is separate from the provider admin and should not
+automatically receive provider-side access.
+
 ## 3. Provider Backend Admin Flow
 
 ### Entry Point
 
-1. The admin opens the provider frontend.
-2. The admin logs in with email and password.
-3. The `provider_backend` sends an OTP to the admin email.
-4. The admin enters the OTP.
-5. After verification, the admin enters the provider admin dashboard.
-6. The admin OTP is real and is sent to the real admin email.
+1. The provider admin opens the provider frontend.
+2. The provider admin logs in with email and password.
+3. The `provider_backend` sends an OTP to the provider admin email.
+4. The provider admin enters the OTP.
+5. After verification, the provider admin enters the provider admin dashboard.
+6. The provider admin OTP is real and is sent to the real admin email.
+7. This admin account belongs only to the `provider_backend`.
+8. This login flow is separate from the customer-app admin login flow.
 
 ### Provider Admin Responsibilities
 
 Inside the provider admin dashboard, the admin can:
 
-1. create the buyer app first and register it in the provider system
-2. register the buyer app `InsureFlow` in the provider backend
-3. generate and copy the API key used for buyer-to-provider communication
-4. register provider insurance companies
-5. create insurance plans under provider companies
-6. add separate optional add-ons to plans where applicable
-7. manage plans where some companies or plans have add-ons and some do not
-8. view all registered companies
-9. view all published plans
-10. ensure proper API-key-based communication between the buyer app and
-    insurance provider companies
-11. monitor provider-side quote and payment records if those views are exposed
-    in the dashboard
+1. register provider insurance companies
+2. create insurance plans under provider companies
+3. add separate optional add-ons to plans where applicable
+4. manage plans where some companies or plans have add-ons and some do not
+5. view provider-side registered companies
+6. view published plans
+7. ensure proper provider-side setup and integration configuration
+8. monitor provider-side quote and payment records if those views are exposed
+   in the dashboard
 
 ### Provider-Side Role Rules
 
@@ -163,13 +167,17 @@ Inside the provider admin dashboard, the admin can:
 2. No customer logs in to the provider application.
 3. No separate provider employee role is currently used.
 4. This admin controls provider-side setup, onboarding, and management.
-5. Buyer-to-provider communication should happen through API keys.
+5. This admin is separate from the customer-app admin.
+6. Buyer-to-provider communication should happen through API keys.
 
 ### Provider Admin Flow Summary
 
 The provider admin logs in with email, password, and OTP, then manages
-buyer-app registration, API-key-based integration setup, provider companies,
-plans, add-ons, and provider-side insurance configuration.
+provider companies, plans, add-ons, and provider-side insurance
+configuration.
+
+The provider admin is separate from the customer-app admin and should not
+automatically receive customer-side access.
 
 ## 4. Platform-Level Role View
 
@@ -194,15 +202,16 @@ The customer-app admin role exists in the main platform and is used for:
 3. viewing policies
 4. handling customer-side issues
 5. viewing and resolving customer tickets
+6. customer-side administration only
 
 ### Provider Admin Role
 
 The provider admin role exists in the provider platform and is used for:
 
-1. buyer-app registration
-2. insurer onboarding
-3. API-key-based integration setup
-4. plan and add-on management
+1. insurer onboarding
+2. provider-side setup and configuration
+3. plan and add-on management
+4. provider-side administration only
 
 ## 5. Final Simple Summary
 
@@ -210,6 +219,8 @@ InsureFlow has two main operational sides:
 
 - the customer side, where customers complete insurance journeys and customer
   admins monitor them and resolve tickets raised by customers
-- the provider side, where the provider admin configures the buyer app,
-  provider companies, plans, add-ons, and API-key-based provider integration
-  setup
+- the provider side, where the provider admin configures provider companies,
+  plans, add-ons, and provider-side setup
+
+These two admin flows are separate. A customer-app admin belongs only to the
+main/customer side, and a provider admin belongs only to the provider side.

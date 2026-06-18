@@ -22,8 +22,8 @@ class UserRole(str, Enum):
 
     Attributes:
         USER: Standard customer account authenticated through mobile and OTP.
-        ADMIN: Internal admin account authenticated through email, password,
-            and OTP.
+        ADMIN: Customer-app admin account in the main backend authenticated
+            through email, password, and OTP.
     """
 
     USER = "USER"
@@ -94,18 +94,20 @@ class UserOtp(BaseModel):
 class User(Model):
     """Represents a user document stored in the `users` collection.
 
-    This model supports both customer and admin accounts. Customer users are
-    expected to authenticate primarily through mobile number and OTP, while
-    admin users can additionally use email and password.
+    This model supports customer accounts and customer-app admin accounts in
+    the main backend. Customer users are expected to authenticate primarily
+    through mobile number and OTP, while customer-app admins use email,
+    password, and OTP. Provider admins are stored separately in the provider
+    backend and must not be mirrored into this collection.
 
     Attributes:
         mobile_number: Primary mobile number for the user.
         first_name: User's given name.
         last_name: User's family name.
         user_role: Assigned system role for the user.
-        email: Optional admin email address. Kept optional to support normal
-            user accounts that do not require email-based login.
-        password: Optional hashed password, mainly for admin users.
+        email: Optional customer-app admin email address. Kept optional to
+            support normal user accounts that do not require email-based login.
+        password: Optional hashed password, mainly for customer-app admins.
         dob: Optional date of birth.
         address: Optional embedded postal address.
         user_metadata: Optional dictionary for extensible user-related data.

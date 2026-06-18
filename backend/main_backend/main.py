@@ -10,7 +10,6 @@ from fastapi.staticfiles import StaticFiles
 
 from core.apis.api import router as api_router
 from core.database.database import close_mongo_connection, connect_to_mongo
-from core.services.admin_sync_service import sync_provider_admins_to_main
 
 
 app = FastAPI(
@@ -47,10 +46,9 @@ app.include_router(api_router)
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    """Initialise database connectivity and sync shared admin accounts."""
+    """Initialise database connectivity for the main backend."""
 
     await connect_to_mongo()
-    await sync_provider_admins_to_main()
 
 
 @app.on_event("shutdown")
