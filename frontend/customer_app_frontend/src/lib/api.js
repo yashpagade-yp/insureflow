@@ -185,4 +185,38 @@ export function respondToAdminTicket(ticketId, payload) {
   return unwrapRequest(mainApi.patch(`/v1/admins/tickets/${ticketId}`, payload));
 }
 
+export function getCallingBotConfig() {
+  return unwrapRequest(mainApi.get("/v1/admins/calling-bot/config"));
+}
+
+export function listCallingBotCalls() {
+  return unwrapRequest(mainApi.get("/v1/admins/calling-bot/calls"));
+}
+
+export function getCallingBotCall(callReference) {
+  return unwrapRequest(mainApi.get(`/v1/admins/calling-bot/calls/${callReference}`));
+}
+
+export function startCallingBotCall(payload) {
+  return unwrapRequest(mainApi.post("/v1/admins/calling-bot/calls", payload));
+}
+
+export function prepareCallingBotPurchase(callReference, payload) {
+  return unwrapRequest(
+    mainApi.post(
+      `/v1/admins/calling-bot/calls/${callReference}/prepare-purchase`,
+      payload
+    )
+  );
+}
+
+export function completeCallingBotPurchase(callReference, payload) {
+  return unwrapRequest(
+    mainApi.post(
+      `/v1/admins/calling-bot/calls/${callReference}/complete-purchase`,
+      payload
+    )
+  );
+}
+
 export default mainApi;

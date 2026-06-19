@@ -7,6 +7,7 @@ import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminPolicyHubPage from "./pages/AdminPolicyHubPage";
 import AdminVerifyOtpPage from "./pages/AdminVerifyOtpPage";
+import CallingBotAdminPage from "./pages/CallingBotAdminPage";
 import CustomerDashboardPage from "./pages/CustomerDashboardPage";
 import CustomerLoginPage from "./pages/CustomerLoginPage";
 import CustomerVerifyOtpPage from "./pages/CustomerVerifyOtpPage";
@@ -52,6 +53,7 @@ function App() {
       >
         <Route index element={<Navigate to="/admin/app/dashboard" replace />} />
         <Route path="dashboard" element={<AdminDashboardPage />} />
+        <Route path="calling-bot" element={<CallingBotAdminPage />} />
         <Route path="policy-hub" element={<AdminPolicyHubPage />} />
       </Route>
 
