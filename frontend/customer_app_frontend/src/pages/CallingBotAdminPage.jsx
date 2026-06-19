@@ -300,6 +300,37 @@ function CallingBotAdminPage() {
     }
   }
 
+  async function handleCallAgain(callReference) {
+    setIsSubmitting(true);
+    setStatus({ type: "", message: "" });
+    setPrepareResult(null);
+    setPurchaseResult(null);
+
+    try {
+      const callDetail =
+        selectedCallReference === callReference && selectedCall
+          ? selectedCall
+          : await getCallingBotCall(callReference);
+      const response = await startCallingBotCall({
+        customer_name: callDetail.customer_name,
+        customer_phone: callDetail.customer_phone,
+        customer_email: callDetail.customer_email || null,
+        desired_coverage_amount: callDetail.desired_coverage_amount ?? null,
+        notes: `Follow-up call created from previous call ${callReference}.`,
+      });
+      setStatus({
+        type: "success",
+        message: `New outbound call started for ${callDetail.customer_name}.`,
+      });
+      setExpandedConversationReference("");
+      await loadCalls(response.call_reference);
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function handlePreparePurchase() {
     if (!selectedCallReference || !purchaseForm.selected_plan_id.trim()) {
       setStatus({
@@ -512,10 +543,19 @@ function CallingBotAdminPage() {
                       type="button"
                       className="secondary-button"
                       onClick={() => handleConversationToggle(item.call_reference)}
+                      disabled={isSubmitting}
                     >
                       {expandedConversationReference === item.call_reference
                         ? "Hide conversation"
                         : "View conversation"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => handleCallAgain(item.call_reference)}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? "Calling..." : "☎ Call Again"}
                     </button>
                   </div>
 
