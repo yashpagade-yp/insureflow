@@ -857,6 +857,33 @@ class CallingBotController:
                 httperror,
             )
             call_record = await self._get_call_record(call_reference)
+            selected_plan = self._get_selected_recommended_plan(call_record)
+            payment_otp_action_url = (
+                f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
+                f"{call_reference}/payment-otp"
+            )
+            if (
+                isinstance(httperror.detail, str)
+                and httperror.detail == "Invalid payment OTP."
+            ):
+                await self.calling_bot_crud.update(
+                    call_record,
+                    {
+                        "last_error": httperror.detail,
+                        "transcript_lines": [
+                            *call_record.transcript_lines,
+                            "System: Provider rejected the payment OTP as invalid.",
+                            "Bot: That OTP did not match. Please say the six digit OTP again, or enter it using your keypad.",
+                        ],
+                    },
+                )
+                return self.twilio_voice_service.build_payment_otp_capture_response(
+                    selected_plan_name=selected_plan.plan_name,
+                    total_premium=selected_plan.total_premium,
+                    payment_otp_action_url=payment_otp_action_url,
+                    add_on_summary=selected_plan.add_on_summary,
+                    retry=True,
+                )
             await self.calling_bot_crud.update(
                 call_record,
                 {
@@ -1328,7 +1355,7 @@ class CallingBotController:
         normalized_digits = "".join(
             character for character in (digits or "") if character.isdigit()
         )
-        if 4 <= len(normalized_digits) <= 8:
+        if len(normalized_digits) == 6:
             return normalized_digits
 
         normalized_speech = (speech_result or "").strip().lower()
@@ -1362,7 +1389,7 @@ class CallingBotController:
                 numeric_tokens.append(mapped_digit)
 
         otp_value = "".join(numeric_tokens)
-        if 4 <= len(otp_value) <= 8:
+        if len(otp_value) == 6:
             return otp_value
         return None
 
