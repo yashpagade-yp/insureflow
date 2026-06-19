@@ -39,25 +39,26 @@ function LoginPage() {
   return (
     <div className="auth-layout">
       <section className="auth-hero">
-        <p className="eyebrow-text">InsureFlow health insurance operations</p>
-        <h1>Run health insurer onboarding from one focused admin console.</h1>
+        <p className="eyebrow-text">Provider operations system</p>
+        <h1>Run the carrier side like a live command center.</h1>
         <p className="auth-hero-copy">
-          Use your provider-admin email, password, and OTP to access health
-          insurer setup, mediator registration, and policy-plan management.
+          Use your provider-admin credentials to enter the internal workspace for
+          company onboarding, plan publishing, quote visibility, and payment-side
+          monitoring.
         </p>
 
         <div className="hero-grid">
           <article className="hero-tile">
-            <h3>Insurer onboarding</h3>
-            <p>Register mediators and health insurance providers with clean API-key handoff.</p>
+            <h3>Network control</h3>
+            <p>Bring buyer companies and provider carriers into one governed network with clean activation status.</p>
           </article>
           <article className="hero-tile">
-            <h3>Plan publishing</h3>
-            <p>Define hospitalization, family floater, and rider-ready health plans in one workflow.</p>
+            <h3>Plan studio</h3>
+            <p>Publish coverage products, riders, pricing, and benefits in a format ready for quote generation.</p>
           </article>
           <article className="hero-tile">
-            <h3>Secure admin access</h3>
-            <p>OTP-based verification keeps the live demo realistic, safe, and presentation-ready.</p>
+            <h3>Operational visibility</h3>
+            <p>Track quotes and payments from the provider side without mixing this experience with the customer journey.</p>
           </article>
         </div>
       </section>
@@ -65,9 +66,9 @@ function LoginPage() {
       <section className="auth-panel">
         <div className="auth-card">
           <p className="eyebrow-text">Provider admin sign in</p>
-          <h2>Start secure login</h2>
+          <h2>Enter provider workspace</h2>
           <p className="muted-copy">
-            Enter your admin email and password to receive a verification OTP for the health insurance admin panel.
+            Enter your provider-admin email and password to request a one-time verification code.
           </p>
 
           <form className="auth-form" onSubmit={handleSubmit}>

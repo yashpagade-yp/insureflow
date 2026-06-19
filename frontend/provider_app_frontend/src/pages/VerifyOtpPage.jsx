@@ -36,14 +36,14 @@ function VerifyOtpPage() {
   return (
     <div className="otp-layout">
       <div className="otp-card">
-        <p className="eyebrow-text">Second factor verification</p>
-        <h1>Enter the OTP sent to your email</h1>
+        <p className="eyebrow-text">Secure provider verification</p>
+        <h1>Confirm the OTP and unlock the provider console</h1>
         <p className="muted-copy">
           We sent a provider-admin verification code to <strong>{targetEmail}</strong>.
         </p>
         {pendingLogin?.otpExpiresAt ? (
           <p className="muted-copy">
-            OTP expires at: {new Date(pendingLogin.otpExpiresAt).toLocaleString()}
+            OTP expires at: {new Date(pendingLogin.otpExpiresAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST
           </p>
         ) : null}
 

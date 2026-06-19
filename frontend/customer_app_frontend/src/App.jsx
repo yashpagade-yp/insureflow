@@ -54,7 +54,7 @@ function App() {
         <Route index element={<Navigate to="/admin/app/dashboard" replace />} />
         <Route path="dashboard" element={<AdminDashboardPage />} />
         <Route path="calling-bot" element={<CallingBotAdminPage />} />
-        <Route path="policy-hub" element={<AdminPolicyHubPage />} />
+        <Route path="policies" element={<AdminPolicyHubPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

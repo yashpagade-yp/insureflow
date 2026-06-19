@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -206,6 +207,17 @@ class CallingBotController:
         """Return the first TwiML response for the outbound bot call."""
 
         call_record = await self._get_call_record(call_reference)
+        call_record = await self.calling_bot_crud.update(
+            call_record,
+            {
+                "status": CallStatus.IN_PROGRESS,
+                "transcript_lines": [
+                    *call_record.transcript_lines,
+                    "Bot: Hello. This is InsureFlow calling to help with your health insurance journey.",
+                    "Bot: If this is a good time, press 1 or say yes. If you want a callback later, press 2 or say later.",
+                ],
+            },
+        )
         interest_action_url = (
             f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
             f"{call_reference}/interest"
@@ -225,22 +237,38 @@ class CallingBotController:
 
         call_record = await self._get_call_record(call_reference)
         interpreted_interest = self._interpret_interest(digits, speech_result)
-        transcript_line = "Customer interest response could not be understood."
+        transcript_line = (
+            f"Customer: {self._describe_customer_response(digits, speech_result, 'No clear response')}"
+        )
+        outcome_line = "System: Customer interest response could not be understood."
         if interpreted_interest == CustomerInterestStatus.INTERESTED:
-            transcript_line = "Customer confirmed this is a good time to continue."
+            outcome_line = "System: Customer confirmed this is a good time to continue."
         elif interpreted_interest == CustomerInterestStatus.NOT_INTERESTED:
-            transcript_line = "Customer requested to stop or continue later."
+            outcome_line = "System: Customer requested to stop or continue later."
 
         call_record = await self.calling_bot_crud.update(
             call_record,
             {
                 "customer_interest": interpreted_interest,
                 "status": CallStatus.IN_PROGRESS,
-                "transcript_lines": [*call_record.transcript_lines, transcript_line],
+                "transcript_lines": [
+                    *call_record.transcript_lines,
+                    transcript_line,
+                    outcome_line,
+                ],
             },
         )
 
         if interpreted_interest == CustomerInterestStatus.UNKNOWN:
+            await self.calling_bot_crud.update(
+                call_record,
+                {
+                    "transcript_lines": [
+                        *call_record.transcript_lines,
+                        "Bot: Sorry, I did not catch that clearly. Please answer with yes to continue or later for a callback.",
+                    ],
+                },
+            )
             return self.twilio_voice_service.build_interest_retry_response(
                 interest_action_url=(
                     f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
@@ -248,7 +276,116 @@ class CallingBotController:
                 )
             )
         if interpreted_interest == CustomerInterestStatus.NOT_INTERESTED:
+            await self.calling_bot_crud.update(
+                call_record,
+                {
+                    "transcript_lines": [
+                        *call_record.transcript_lines,
+                        "Bot: No problem. Thank you for your time.",
+                    ],
+                },
+            )
             return self.twilio_voice_service.build_polite_exit_response()
+
+        if call_record.customer_name or call_record.customer_email:
+            await self.calling_bot_crud.update(
+                call_record,
+                {
+                    "transcript_lines": [
+                        *call_record.transcript_lines,
+                        "Bot: Before continuing, I will confirm the details already on record.",
+                    ],
+                },
+            )
+            detail_action_url = (
+                f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
+                f"{call_reference}/confirm-details"
+            )
+            return self.twilio_voice_service.build_detail_confirmation_response(
+                customer_name=call_record.customer_name,
+                customer_email=call_record.customer_email,
+                detail_action_url=detail_action_url,
+            )
+
+        coverage_action_url = (
+            f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
+            f"{call_reference}/coverage"
+        )
+        await self.calling_bot_crud.update(
+            call_record,
+            {
+                "transcript_lines": [
+                    *call_record.transcript_lines,
+                    "Bot: What coverage amount would you like me to search for?",
+                ],
+            },
+        )
+        return self.twilio_voice_service.build_interest_capture_response(
+            coverage_action_url
+        )
+
+    async def process_detail_confirmation_response(
+        self,
+        call_reference: str,
+        digits: str | None,
+        speech_result: str | None,
+    ) -> str:
+        """Confirm stored customer details and move the call toward coverage capture."""
+
+        call_record = await self._get_call_record(call_reference)
+        is_confirmed = self._interpret_binary_confirmation(digits, speech_result)
+        customer_line = (
+            f"Customer: {self._describe_customer_response(digits, speech_result, 'No clear response')}"
+        )
+
+        if is_confirmed is None:
+            await self.calling_bot_crud.update(
+                call_record,
+                {
+                    "transcript_lines": [
+                        *call_record.transcript_lines,
+                        customer_line,
+                        "Bot: Sorry, I did not catch that. Please confirm whether your details are correct.",
+                    ],
+                },
+            )
+            detail_action_url = (
+                f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
+                f"{call_reference}/confirm-details"
+            )
+            return self.twilio_voice_service.build_detail_confirmation_response(
+                customer_name=call_record.customer_name,
+                customer_email=call_record.customer_email,
+                detail_action_url=detail_action_url,
+                retry=True,
+            )
+
+        if is_confirmed is False:
+            await self.calling_bot_crud.update(
+                call_record,
+                {
+                    "transcript_lines": [
+                        *call_record.transcript_lines,
+                        customer_line,
+                        "System: Customer said the stored details need correction before continuing.",
+                        "Bot: Thank you. Our team will help correct the details before continuing.",
+                    ],
+                    "summary": "Customer requested a detail correction follow-up.",
+                },
+            )
+            return self.twilio_voice_service.build_detail_correction_handoff_response()
+
+        await self.calling_bot_crud.update(
+            call_record,
+            {
+                "transcript_lines": [
+                    *call_record.transcript_lines,
+                    customer_line,
+                    "System: Customer confirmed the stored details before coverage capture.",
+                    "Bot: Thank you. Please tell me the coverage amount you want.",
+                ],
+            },
+        )
         coverage_action_url = (
             f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
             f"{call_reference}/coverage"
@@ -277,7 +414,9 @@ class CallingBotController:
                     {
                         "transcript_lines": [
                             *call_record.transcript_lines,
-                            "Coverage amount was not captured successfully.",
+                            f"Customer: {self._describe_customer_response(digits, speech_result, 'No clear response')}",
+                            "System: Coverage amount was not captured successfully.",
+                            "Bot: Sorry, I did not catch the coverage amount. Please say only the amount you want.",
                         ],
                     },
                 )
@@ -309,6 +448,14 @@ class CallingBotController:
             quote_response = await self.quote_controller.get_quotes(
                 journey_response.transaction_id
             )
+            matched_quote_items = sorted(
+                [
+                    item
+                    for item in quote_response.items
+                    if item.coverage_amount <= coverage_amount
+                ],
+                key=lambda item: item.total_premium,
+            )[:3]
             recommended_plans = [
                 RecommendedPlanSnapshot.model_validate(
                     {
@@ -317,23 +464,15 @@ class CallingBotController:
                         "plan_name": item.plan_name,
                         "coverage_amount": item.coverage_amount,
                         "total_premium": item.total_premium,
+                        "add_on_summary": self._build_add_on_summary(item),
                     }
                 )
-                for item in quote_response.items
-                if item.coverage_amount <= coverage_amount
+                for item in matched_quote_items
             ]
-            recommended_plans = sorted(
-                recommended_plans,
-                key=lambda item: item.total_premium,
-            )[:3]
 
             plan_summary_lines = [
-                (
-                    f"Option {index + 1}. {item.plan_name} from {item.company_name}. "
-                    f"Coverage is about rupees {int(item.coverage_amount):,}. "
-                    f"Premium is about rupees {int(item.total_premium):,}."
-                )
-                for index, item in enumerate(recommended_plans)
+                self._build_recommended_plan_summary(index=index, item=item)
+                for index, item in enumerate(matched_quote_items)
             ]
             summary = (
                 f"Customer requested approximately Rs. {int(coverage_amount):,} coverage. "
@@ -349,13 +488,20 @@ class CallingBotController:
                     "summary": summary,
                     "transcript_lines": [
                         *call_record.transcript_lines,
-                        f"Captured coverage amount: {coverage_amount}.",
-                        f"Prepared {len(recommended_plans)} matching plans from the database.",
+                        f"Customer: {self._describe_customer_response(digits, speech_result, str(int(coverage_amount)))}",
+                        f"System: Captured coverage amount: {coverage_amount}.",
+                        f"System: Prepared {len(recommended_plans)} matching plans from the database.",
+                        "Bot: I found a few suitable plan options based on your coverage amount.",
                     ],
                 },
             )
+            plan_choice_action_url = (
+                f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
+                f"{call_reference}/plan-choice"
+            )
             return self.twilio_voice_service.build_plan_summary_response(
-                plan_summary_lines
+                plan_summary_lines,
+                plan_choice_action_url=plan_choice_action_url,
             )
         except HTTPException as httperror:
             logging.error(
@@ -394,6 +540,356 @@ class CallingBotController:
             )
             return self.twilio_voice_service.build_plan_summary_response([])
 
+    async def process_plan_selection_response(
+        self,
+        call_reference: str,
+        digits: str | None,
+        speech_result: str | None,
+    ) -> str:
+        """Capture the chosen recommended plan and move the call forward."""
+
+        call_record = await self._get_call_record(call_reference)
+        selected_option_index = self._interpret_plan_selection(digits, speech_result)
+        if selected_option_index is None:
+            plan_choice_action_url = (
+                f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
+                f"{call_reference}/plan-choice"
+            )
+            return self.twilio_voice_service.build_plan_selection_retry_response(
+                plan_choice_action_url
+            )
+
+        if selected_option_index >= len(call_record.recommended_plans):
+            plan_choice_action_url = (
+                f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
+                f"{call_reference}/plan-choice"
+            )
+            return self.twilio_voice_service.build_plan_selection_retry_response(
+                plan_choice_action_url
+            )
+
+        selected_plan = call_record.recommended_plans[selected_option_index]
+        await self.calling_bot_crud.update(
+            call_record,
+            {
+                "selected_plan_id": selected_plan.plan_id,
+                "selected_plan_name": selected_plan.plan_name,
+                "provider_company_name": selected_plan.company_name,
+                "summary": (
+                    f"Customer chose {selected_plan.plan_name} after hearing the recommended options."
+                ),
+                "transcript_lines": [
+                    *call_record.transcript_lines,
+                    f"Customer: {self._describe_customer_response(digits, speech_result, f'Option {selected_option_index + 1}')}",
+                    f"System: Customer selected plan option {selected_option_index + 1}: {selected_plan.plan_name}.",
+                    (
+                        f"Bot: You selected {selected_plan.plan_name} from {selected_plan.company_name}. "
+                        f"If you want to continue with payment verification now, press 1 or say yes."
+                    ),
+                ],
+            },
+        )
+        payment_confirmation_action_url = (
+            f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
+            f"{call_reference}/payment-confirmation"
+        )
+        return self.twilio_voice_service.build_payment_confirmation_response(
+            selected_plan_name=selected_plan.plan_name,
+            provider_company_name=selected_plan.company_name,
+            total_premium=selected_plan.total_premium,
+            payment_confirmation_action_url=payment_confirmation_action_url,
+            add_on_summary=selected_plan.add_on_summary,
+        )
+
+    async def process_payment_confirmation_response(
+        self,
+        call_reference: str,
+        digits: str | None,
+        speech_result: str | None,
+    ) -> str:
+        """Confirm whether the customer wants to continue to payment verification."""
+
+        try:
+            logging.info(
+                "Executing CallingBotController.process_payment_confirmation_response function"
+            )
+            call_record = await self._get_call_record(call_reference)
+            selected_plan = self._get_selected_recommended_plan(call_record)
+            customer_line = (
+                f"Customer: {self._describe_customer_response(digits, speech_result, 'No clear response')}"
+            )
+            is_confirmed = self._interpret_binary_confirmation(digits, speech_result)
+            payment_confirmation_action_url = (
+                f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
+                f"{call_reference}/payment-confirmation"
+            )
+            if is_confirmed is None:
+                await self.calling_bot_crud.update(
+                    call_record,
+                    {
+                        "transcript_lines": [
+                            *call_record.transcript_lines,
+                            customer_line,
+                            "Bot: Sorry, I did not understand that clearly. Please confirm whether you want to continue with payment verification.",
+                        ],
+                    },
+                )
+                return self.twilio_voice_service.build_payment_confirmation_response(
+                    selected_plan_name=selected_plan.plan_name,
+                    provider_company_name=selected_plan.company_name,
+                    total_premium=selected_plan.total_premium,
+                    payment_confirmation_action_url=payment_confirmation_action_url,
+                    retry=True,
+                )
+
+            if is_confirmed is False:
+                await self.calling_bot_crud.update(
+                    call_record,
+                    {
+                        "summary": "Customer selected a plan but chose to continue payment later.",
+                        "transcript_lines": [
+                            *call_record.transcript_lines,
+                            customer_line,
+                            "System: Customer decided to continue the payment step later.",
+                            "Bot: No problem. I have saved your selected plan and our team will help you continue later.",
+                        ],
+                    },
+                )
+                return self.twilio_voice_service.build_payment_deferred_response()
+
+            await self.calling_bot_crud.update(
+                call_record,
+                {
+                    "transcript_lines": [
+                        *call_record.transcript_lines,
+                        customer_line,
+                        "System: Customer confirmed that payment verification can continue now.",
+                        "Bot: Please stay on the line while I prepare your payment verification.",
+                    ],
+                },
+            )
+            payment_otp_action_url = (
+                f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
+                f"{call_reference}/payment-otp"
+            )
+            asyncio.create_task(
+                self._prepare_purchase_for_selected_plan_background(
+                    call_reference=call_reference,
+                    selected_plan_id=selected_plan.plan_id,
+                )
+            )
+            return self.twilio_voice_service.build_payment_processing_response(
+                payment_otp_action_url=payment_otp_action_url,
+            )
+        except HTTPException as httperror:
+            logging.error(
+                "Error in CallingBotController.process_payment_confirmation_response function: %s",
+                httperror,
+            )
+            call_record = await self._get_call_record(call_reference)
+            await self.calling_bot_crud.update(
+                call_record,
+                {
+                    "last_error": (
+                        httperror.detail
+                        if isinstance(httperror.detail, str)
+                        else "Payment confirmation failed."
+                    ),
+                    "transcript_lines": [
+                        *call_record.transcript_lines,
+                        "System: Payment confirmation step failed during the call.",
+                    ],
+                },
+            )
+            return self.twilio_voice_service.build_purchase_failure_response()
+        except Exception as error:
+            logging.error(
+                "Error in CallingBotController.process_payment_confirmation_response function: %s",
+                error,
+            )
+            call_record = await self._get_call_record(call_reference)
+            await self.calling_bot_crud.update(
+                call_record,
+                {
+                    "last_error": "Unexpected payment confirmation failure.",
+                    "transcript_lines": [
+                        *call_record.transcript_lines,
+                        "System: Unexpected payment confirmation failure occurred.",
+                    ],
+                },
+            )
+            return self.twilio_voice_service.build_purchase_failure_response()
+
+    async def process_payment_otp_response(
+        self,
+        call_reference: str,
+        digits: str | None,
+        speech_result: str | None,
+    ) -> str:
+        """Capture OTP, verify payment, and complete the policy purchase flow."""
+
+        try:
+            logging.info(
+                "Executing CallingBotController.process_payment_otp_response function"
+            )
+            call_record = await self._get_call_record(call_reference)
+            selected_plan = self._get_selected_recommended_plan(call_record)
+            customer_line = (
+                f"Customer: {self._describe_customer_response(digits, speech_result, 'No clear response')}"
+            )
+            otp_value = self._extract_otp_value(digits, speech_result)
+            payment_otp_action_url = (
+                f"{self.twilio_voice_service.webhook_base_url}/v1/calling-bot/twiml/outbound/"
+                f"{call_reference}/payment-otp"
+            )
+
+            if not digits and not speech_result:
+                if call_record.last_error and not call_record.payment_reference:
+                    return self.twilio_voice_service.build_purchase_failure_response()
+                if not call_record.payment_reference:
+                    return self.twilio_voice_service.build_payment_otp_pending_response(
+                        payment_otp_action_url=payment_otp_action_url,
+                    )
+                await self.calling_bot_crud.update(
+                    call_record,
+                    {
+                        "transcript_lines": [
+                            *call_record.transcript_lines,
+                            "Bot: A payment OTP has been sent for verification. Please say or enter the OTP now.",
+                        ],
+                    },
+                )
+                return self.twilio_voice_service.build_payment_otp_capture_response(
+                    selected_plan_name=selected_plan.plan_name,
+                    total_premium=selected_plan.total_premium,
+                    payment_otp_action_url=payment_otp_action_url,
+                    add_on_summary=selected_plan.add_on_summary,
+                )
+
+            if not call_record.payment_reference:
+                await self.calling_bot_crud.update(
+                    call_record,
+                    {
+                        "transcript_lines": [
+                            *call_record.transcript_lines,
+                            customer_line,
+                            "System: Customer responded before payment OTP preparation finished.",
+                            "Bot: Payment verification is still being prepared. Please stay on the line for a moment.",
+                        ],
+                    },
+                )
+                return self.twilio_voice_service.build_payment_otp_pending_response(
+                    payment_otp_action_url=payment_otp_action_url,
+                )
+
+            if otp_value == "later":
+                await self.calling_bot_crud.update(
+                    call_record,
+                    {
+                        "summary": "Customer paused the payment OTP verification step.",
+                        "transcript_lines": [
+                            *call_record.transcript_lines,
+                            customer_line,
+                            "System: Customer asked to continue payment OTP verification later.",
+                            "Bot: No problem. Our team will help you continue the payment step later.",
+                        ],
+                    },
+                )
+                return self.twilio_voice_service.build_payment_deferred_response()
+
+            if otp_value is None:
+                await self.calling_bot_crud.update(
+                    call_record,
+                    {
+                        "transcript_lines": [
+                            *call_record.transcript_lines,
+                            customer_line,
+                            "Bot: Sorry, I could not capture the OTP clearly. Please say each digit slowly or enter it on your keypad.",
+                        ],
+                    },
+                )
+                return self.twilio_voice_service.build_payment_otp_capture_response(
+                    selected_plan_name=selected_plan.plan_name,
+                    total_premium=selected_plan.total_premium,
+                    payment_otp_action_url=payment_otp_action_url,
+                    add_on_summary=selected_plan.add_on_summary,
+                    retry=True,
+                )
+
+            await self.calling_bot_crud.update(
+                call_record,
+                {
+                    "transcript_lines": [
+                        *call_record.transcript_lines,
+                        customer_line,
+                        "System: Payment OTP captured from the customer.",
+                    ],
+                },
+            )
+            purchase_response = await self.complete_purchase(
+                call_reference=call_reference,
+                payload=CallingBotCompletePurchaseRequest(
+                    selected_plan_id=selected_plan.plan_id,
+                    payment_otp=otp_value,
+                ),
+            )
+            refreshed_call_record = await self._get_call_record(call_reference)
+            await self.calling_bot_crud.update(
+                refreshed_call_record,
+                {
+                    "transcript_lines": [
+                        *refreshed_call_record.transcript_lines,
+                        (
+                            f"Bot: Your payment was verified and your policy number is "
+                            f"{purchase_response.policy_number}."
+                        ),
+                    ],
+                },
+            )
+            return self.twilio_voice_service.build_purchase_success_response(
+                selected_plan_name=selected_plan.plan_name,
+                policy_number=str(purchase_response.policy_number or ""),
+                customer_email=refreshed_call_record.customer_email,
+            )
+        except HTTPException as httperror:
+            logging.error(
+                "Error in CallingBotController.process_payment_otp_response function: %s",
+                httperror,
+            )
+            call_record = await self._get_call_record(call_reference)
+            await self.calling_bot_crud.update(
+                call_record,
+                {
+                    "last_error": (
+                        httperror.detail
+                        if isinstance(httperror.detail, str)
+                        else "Payment OTP verification failed."
+                    ),
+                    "transcript_lines": [
+                        *call_record.transcript_lines,
+                        "System: Payment OTP verification failed during the call.",
+                    ],
+                },
+            )
+            return self.twilio_voice_service.build_purchase_failure_response()
+        except Exception as error:
+            logging.error(
+                "Error in CallingBotController.process_payment_otp_response function: %s",
+                error,
+            )
+            call_record = await self._get_call_record(call_reference)
+            await self.calling_bot_crud.update(
+                call_record,
+                {
+                    "last_error": "Unexpected payment OTP verification failure.",
+                    "transcript_lines": [
+                        *call_record.transcript_lines,
+                        "System: Unexpected payment OTP verification failure occurred.",
+                    ],
+                },
+            )
+            return self.twilio_voice_service.build_purchase_failure_response()
+
     async def update_call_status_from_callback(
         self,
         call_reference: str,
@@ -411,16 +907,37 @@ class CallingBotController:
             )
             call_status = self._map_twilio_status_to_call_status(str(raw_status or ""))
             updates: dict[str, Any] = {"status": call_status}
+            callback_received_at = datetime.now(timezone.utc)
             if callback_payload.get("CallSid"):
                 updates["call_sid"] = str(callback_payload["CallSid"])
+            callback_duration_seconds: int | None = None
             if callback_payload.get("CallDuration"):
                 try:
-                    updates["duration_seconds"] = int(callback_payload["CallDuration"])
+                    callback_duration_seconds = int(callback_payload["CallDuration"])
                 except Exception:
                     logging.warning(
                         "Invalid CallDuration received for call %s",
                         call_reference,
                     )
+            existing_duration_seconds = int(call_record.duration_seconds or 0)
+            elapsed_duration_seconds = max(
+                int((callback_received_at - call_record.created_at).total_seconds()),
+                0,
+            )
+            if callback_duration_seconds is not None:
+                updates["duration_seconds"] = max(
+                    existing_duration_seconds,
+                    callback_duration_seconds,
+                    elapsed_duration_seconds if call_status == CallStatus.COMPLETED else 0,
+                )
+            elif call_status in {
+                CallStatus.IN_PROGRESS,
+                CallStatus.COMPLETED,
+            }:
+                updates["duration_seconds"] = max(
+                    existing_duration_seconds,
+                    elapsed_duration_seconds,
+                )
             transcript_lines = [
                 *call_record.transcript_lines,
                 f"Twilio callback received with status {call_status.value}.",
@@ -433,7 +950,7 @@ class CallingBotController:
                 CallStatus.BUSY,
                 CallStatus.CANCELED,
             }:
-                updates["completed_at"] = datetime.now(timezone.utc)
+                updates["completed_at"] = callback_received_at
             await self.calling_bot_crud.update(call_record, updates)
         except Exception as error:
             logging.error(
@@ -451,51 +968,9 @@ class CallingBotController:
         try:
             logging.info("Executing CallingBotController.prepare_purchase function")
             call_record = await self._get_call_record(call_reference)
-            selected_item = await self._get_selected_quote_item(
-                call_record,
-                payload.selected_plan_id,
-            )
-
-            await self._select_plan_and_add_ons_for_call(call_record, selected_item)
-            payment_response = await self.payment_controller.create_payment(
-                PaymentCreateRequest(
-                    transaction_id=call_record.transaction_id,
-                    user_id=call_record.user_id,
-                    amount=selected_item.total_premium,
-                )
-            )
-            payment_otp_response = await self.payment_controller.send_payment_otp(
-                payment_response.payment_reference
-            )
-            updated_call_record = await self.calling_bot_crud.update(
-                call_record,
-                {
-                    "selected_plan_id": selected_item.plan_id,
-                    "selected_plan_name": selected_item.plan_name,
-                    "provider_company_name": selected_item.company_name,
-                    "payment_reference": payment_response.payment_reference,
-                    "payment_status": payment_response.payment_status,
-                    "status": CallStatus.IN_PROGRESS,
-                    "summary": "Payment OTP generated for calling-bot purchase confirmation.",
-                    "last_error": None,
-                    "transcript_lines": [
-                        *call_record.transcript_lines,
-                        f"Customer selected {selected_item.plan_name}.",
-                        "Mock payment OTP generated for admin-assisted confirmation.",
-                    ],
-                },
-            )
-            return CallingBotPreparePurchaseResponse(
-                message="Calling-bot payment OTP prepared successfully.",
-                call_reference=updated_call_record.call_reference,
-                transaction_id=updated_call_record.transaction_id,
-                selected_plan_id=selected_item.plan_id,
-                selected_plan_name=selected_item.plan_name,
-                provider_company_name=selected_item.company_name,
-                payment_reference=payment_response.payment_reference,
-                payment_status=payment_response.payment_status,
-                otp_expires_at=payment_otp_response.otp_expires_at,
-                plain_otp=payment_otp_response.plain_otp,
+            return await self._prepare_purchase_for_selected_plan(
+                call_record=call_record,
+                selected_plan_id=payload.selected_plan_id,
             )
         except HTTPException as httperror:
             logging.error(
@@ -581,8 +1056,8 @@ class CallingBotController:
                     "last_error": None,
                     "transcript_lines": [
                         *call_record.transcript_lines,
-                        "Mock payment OTP was verified successfully.",
-                        f"Policy {verification_response.policy_number} was issued successfully.",
+                        "System: Payment OTP was verified successfully.",
+                        f"System: Policy {verification_response.policy_number} was issued successfully.",
                     ],
                 },
             )
@@ -800,6 +1275,114 @@ class CallingBotController:
                 return amount
         return None
 
+    def _interpret_binary_confirmation(
+        self,
+        digits: str | None,
+        speech_result: str | None,
+    ) -> bool | None:
+        """Interpret a simple yes/no confirmation from keypad or speech."""
+
+        normalized_digits = (digits or "").strip()
+        normalized_speech = (speech_result or "").strip().lower()
+        if normalized_digits == "1":
+            return True
+        if normalized_digits == "2":
+            return False
+        if any(token in normalized_speech for token in ["yes", "correct", "continue", "confirmed"]):
+            return True
+        if any(token in normalized_speech for token in ["no", "change", "wrong", "incorrect"]):
+            return False
+        return None
+
+    def _interpret_plan_selection(
+        self,
+        digits: str | None,
+        speech_result: str | None,
+    ) -> int | None:
+        """Interpret which recommended plan the customer selected."""
+
+        normalized_digits = (digits or "").strip()
+        normalized_speech = (speech_result or "").strip().lower()
+
+        if normalized_digits == "1":
+            return 0
+        if normalized_digits == "2":
+            return 1
+        if normalized_digits == "3":
+            return 2
+        if any(token in normalized_speech for token in ["option one", "first option", "first plan", "one"]):
+            return 0
+        if any(token in normalized_speech for token in ["option two", "second option", "second plan", "two"]):
+            return 1
+        if any(token in normalized_speech for token in ["option three", "third option", "third plan", "three"]):
+            return 2
+        return None
+
+    def _extract_otp_value(
+        self,
+        digits: str | None,
+        speech_result: str | None,
+    ) -> str | None:
+        """Extract a payment OTP from keypad or speech input."""
+
+        normalized_digits = "".join(
+            character for character in (digits or "") if character.isdigit()
+        )
+        if 4 <= len(normalized_digits) <= 8:
+            return normalized_digits
+
+        normalized_speech = (speech_result or "").strip().lower()
+        if any(token in normalized_speech for token in ["later", "not now", "call later"]):
+            return "later"
+
+        spoken_digit_map = {
+            "zero": "0",
+            "oh": "0",
+            "one": "1",
+            "two": "2",
+            "to": "2",
+            "too": "2",
+            "three": "3",
+            "four": "4",
+            "for": "4",
+            "five": "5",
+            "six": "6",
+            "seven": "7",
+            "eight": "8",
+            "ate": "8",
+            "nine": "9",
+        }
+        numeric_tokens: list[str] = []
+        for token in re.findall(r"[a-z0-9]+", normalized_speech):
+            if token.isdigit():
+                numeric_tokens.extend(list(token))
+                continue
+            mapped_digit = spoken_digit_map.get(token)
+            if mapped_digit is not None:
+                numeric_tokens.append(mapped_digit)
+
+        otp_value = "".join(numeric_tokens)
+        if 4 <= len(otp_value) <= 8:
+            return otp_value
+        return None
+
+    def _describe_customer_response(
+        self,
+        digits: str | None,
+        speech_result: str | None,
+        fallback: str,
+    ) -> str:
+        """Return a readable text version of the customer's response."""
+
+        normalized_speech = (speech_result or "").strip()
+        if normalized_speech:
+            return normalized_speech
+
+        normalized_digits = (digits or "").strip()
+        if normalized_digits:
+            return normalized_digits
+        return fallback
+
     def _map_twilio_status_to_call_status(self, value: str) -> CallStatus:
         """Map a Twilio call status into the local enum."""
 
@@ -855,6 +1438,169 @@ class CallingBotController:
             )
         return selected_item
 
+    def _get_selected_recommended_plan(
+        self,
+        call_record: CallingBotCallModel,
+    ) -> RecommendedPlanSnapshot:
+        """Return the selected plan stored on the call from recommended options."""
+
+        if not call_record.selected_plan_id:
+            logging.warning(
+                "Call %s has no selected plan yet",
+                call_record.call_reference,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A plan must be selected before continuing this step.",
+            )
+
+        selected_plan = next(
+            (
+                item
+                for item in call_record.recommended_plans
+                if item.plan_id == call_record.selected_plan_id
+            ),
+            None,
+        )
+        if selected_plan is None:
+            logging.warning(
+                "Selected recommended plan %s missing on call %s",
+                call_record.selected_plan_id,
+                call_record.call_reference,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Selected recommended plan not found for this call.",
+            )
+        return selected_plan
+
+    async def _prepare_purchase_for_selected_plan(
+        self,
+        call_record: CallingBotCallModel,
+        selected_plan_id: str,
+    ) -> CallingBotPreparePurchaseResponse:
+        """Prepare payment and generate the mock OTP for one selected plan."""
+
+        selected_item = await self._get_selected_quote_item(
+            call_record,
+            selected_plan_id,
+        )
+
+        await self._select_plan_and_add_ons_for_call(call_record, selected_item)
+        payment_response = await self.payment_controller.create_payment(
+            PaymentCreateRequest(
+                transaction_id=call_record.transaction_id,
+                user_id=call_record.user_id,
+                amount=selected_item.total_premium,
+            )
+        )
+        payment_otp_response = await self.payment_controller.send_payment_otp(
+            payment_response.payment_reference
+        )
+        updated_call_record = await self.calling_bot_crud.update(
+            call_record,
+            {
+                "selected_plan_id": selected_item.plan_id,
+                "selected_plan_name": selected_item.plan_name,
+                "provider_company_name": selected_item.company_name,
+                "payment_reference": payment_response.payment_reference,
+                "payment_status": payment_response.payment_status,
+                "status": CallStatus.IN_PROGRESS,
+                "summary": "Payment OTP generated for calling-bot purchase confirmation.",
+                "last_error": None,
+                "transcript_lines": [
+                    *call_record.transcript_lines,
+                    "System: Payment OTP generated for assisted purchase confirmation.",
+                ],
+            },
+        )
+        return CallingBotPreparePurchaseResponse(
+            message="Calling-bot payment OTP prepared successfully.",
+            call_reference=updated_call_record.call_reference,
+            transaction_id=updated_call_record.transaction_id,
+            selected_plan_id=selected_item.plan_id,
+            selected_plan_name=selected_item.plan_name,
+            provider_company_name=selected_item.company_name,
+            payment_reference=payment_response.payment_reference,
+            payment_status=payment_response.payment_status,
+            otp_expires_at=payment_otp_response.otp_expires_at,
+            plain_otp=payment_otp_response.plain_otp,
+        )
+
+    async def _prepare_purchase_for_selected_plan_background(
+        self,
+        call_reference: str,
+        selected_plan_id: str,
+    ) -> None:
+        """Prepare payment in the background so Twilio is not kept waiting."""
+
+        try:
+            call_record = await self._get_call_record(call_reference)
+            await self._prepare_purchase_for_selected_plan(
+                call_record=call_record,
+                selected_plan_id=selected_plan_id,
+            )
+            refreshed_call_record = await self._get_call_record(call_reference)
+            await self.calling_bot_crud.update(
+                refreshed_call_record,
+                {
+                    "transcript_lines": [
+                        *refreshed_call_record.transcript_lines,
+                        "System: Payment verification is ready and OTP was generated successfully.",
+                    ],
+                },
+            )
+        except HTTPException as httperror:
+            logging.error(
+                "Error in CallingBotController._prepare_purchase_for_selected_plan_background function: %s",
+                httperror,
+            )
+            try:
+                call_record = await self._get_call_record(call_reference)
+                await self.calling_bot_crud.update(
+                    call_record,
+                    {
+                        "last_error": (
+                            httperror.detail
+                            if isinstance(httperror.detail, str)
+                            else "Payment preparation failed."
+                        ),
+                        "transcript_lines": [
+                            *call_record.transcript_lines,
+                            "System: Payment preparation failed while the call was still active.",
+                        ],
+                    },
+                )
+            except Exception as update_error:
+                logging.error(
+                    "Failed to persist background payment-preparation error for call %s: %s",
+                    call_reference,
+                    update_error,
+                )
+        except Exception as error:
+            logging.error(
+                "Error in CallingBotController._prepare_purchase_for_selected_plan_background function: %s",
+                error,
+            )
+            try:
+                call_record = await self._get_call_record(call_reference)
+                await self.calling_bot_crud.update(
+                    call_record,
+                    {
+                        "last_error": "Unexpected payment preparation failure.",
+                        "transcript_lines": [
+                            *call_record.transcript_lines,
+                            "System: Unexpected payment preparation failure occurred in background processing.",
+                        ],
+                    },
+                )
+            except Exception as update_error:
+                logging.error(
+                    "Failed to persist unexpected background payment-preparation error for call %s: %s",
+                    call_reference,
+                    update_error,
+                )
+
     async def _select_plan_and_add_ons_for_call(
         self,
         call_record: CallingBotCallModel,
@@ -878,3 +1624,34 @@ class CallingBotController:
                 ],
             )
         )
+
+    def _build_recommended_plan_summary(self, index: int, item: Any) -> str:
+        """Build one spoken summary line for a recommended plan."""
+
+        summary_parts = [
+            f"Option {index + 1}. {item.plan_name} from {item.company_name}.",
+            f"Coverage is about rupees {int(item.coverage_amount):,}.",
+            f"Premium is about rupees {int(item.total_premium):,}.",
+        ]
+        add_on_summary = self._build_add_on_summary(item)
+        if add_on_summary:
+            summary_parts.append(add_on_summary)
+        return " ".join(summary_parts)
+
+    def _build_add_on_summary(self, item: Any) -> str | None:
+        """Build a short spoken add-on summary for one quote item."""
+
+        selected_add_ons = getattr(item, "selected_add_ons", []) or []
+        if selected_add_ons:
+            add_on_names = ", ".join(add_on.name for add_on in selected_add_ons[:2])
+            return (
+                f"This option already includes add-ons like {add_on_names}. "
+                f"Add-on total is about rupees {int(getattr(item, 'add_on_total', 0)):,}."
+            )
+
+        available_add_ons = getattr(item, "available_add_ons", []) or []
+        if available_add_ons:
+            add_on_names = ", ".join(add_on.name for add_on in available_add_ons[:2])
+            return f"Available add-ons include {add_on_names}."
+
+        return None

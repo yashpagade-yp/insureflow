@@ -6,11 +6,12 @@ import StatCard from "../components/StatCard";
 import {
   completeCallingBotPurchase,
   getCallingBotCall,
-  getCallingBotConfig,
   listCallingBotCalls,
   prepareCallingBotPurchase,
   startCallingBotCall,
 } from "../lib/api";
+
+const ACTIVE_CALL_STATUSES = ["queued", "initiated", "ringing", "in-progress"];
 
 function formatDateTime(value) {
   if (!value) {
@@ -18,7 +19,16 @@ function formatDateTime(value) {
   }
 
   try {
-    return new Date(value).toLocaleString();
+    return new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    }).format(new Date(value));
   } catch {
     return value;
   }
@@ -40,15 +50,84 @@ function formatCurrency(value) {
   }
 }
 
+function formatDuration(value) {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  const totalSeconds = Number(value);
+  if (Number.isNaN(totalSeconds) || totalSeconds < 0) {
+    return "-";
+  }
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function getCallDurationSeconds(call) {
+  if (call?.duration_seconds !== null && call?.duration_seconds !== undefined) {
+    return Number(call.duration_seconds);
+  }
+
+  if (!call?.created_at) {
+    return null;
+  }
+
+  const startedAt = new Date(call.created_at).getTime();
+  const endedAt = call.completed_at
+    ? new Date(call.completed_at).getTime()
+    : call.updated_at
+      ? new Date(call.updated_at).getTime()
+      : Date.now();
+
+  if (Number.isNaN(startedAt) || Number.isNaN(endedAt) || endedAt < startedAt) {
+    return null;
+  }
+
+  return Math.floor((endedAt - startedAt) / 1000);
+}
+
+function getTranscriptAppearance(line) {
+  if (line.startsWith("Bot:")) {
+    return {
+      role: "Bot",
+      content: line.replace("Bot:", "").trim(),
+      className: "calling-transcript-entry calling-transcript-bot",
+    };
+  }
+
+  if (line.startsWith("Customer:")) {
+    return {
+      role: "Customer",
+      content: line.replace("Customer:", "").trim(),
+      className: "calling-transcript-entry calling-transcript-customer",
+    };
+  }
+
+  if (line.startsWith("System:")) {
+    return {
+      role: "System",
+      content: line.replace("System:", "").trim(),
+      className: "calling-transcript-entry calling-transcript-system",
+    };
+  }
+
+  return {
+    role: "System",
+    content: line,
+    className: "calling-transcript-entry calling-transcript-system",
+  };
+}
+
 function CallingBotAdminPage() {
-  const [config, setConfig] = useState(null);
   const [calls, setCalls] = useState([]);
   const [selectedCallReference, setSelectedCallReference] = useState("");
   const [selectedCall, setSelectedCall] = useState(null);
+  const [expandedConversationReference, setExpandedConversationReference] = useState("");
   const [prepareResult, setPrepareResult] = useState(null);
   const [purchaseResult, setPurchaseResult] = useState(null);
   const [status, setStatus] = useState({ type: "", message: "" });
-  const [isLoadingConfig, setIsLoadingConfig] = useState(false);
   const [isLoadingCalls, setIsLoadingCalls] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [startForm, setStartForm] = useState({
@@ -65,9 +144,7 @@ function CallingBotAdminPage() {
 
   const metrics = useMemo(() => {
     const completedCalls = calls.filter((item) => item.status === "completed");
-    const activeCalls = calls.filter((item) =>
-      ["queued", "initiated", "ringing", "in-progress"].includes(item.status)
-    );
+    const activeCalls = calls.filter((item) => ACTIVE_CALL_STATUSES.includes(item.status));
     const convertedCalls = calls.filter((item) => item.policy_number);
 
     return [
@@ -91,25 +168,43 @@ function CallingBotAdminPage() {
         value: convertedCalls.length,
         helper: "Calls that converted into a completed policy purchase",
       },
+      {
+        label: "Total call minutes",
+        value: Math.round(
+          calls.reduce(
+            (total, item) => total + Number(getCallDurationSeconds(item) || 0),
+            0
+          ) / 60
+        ),
+        helper: "Combined completed duration across tracked calls",
+      },
     ];
   }, [calls]);
 
   useEffect(() => {
-    void loadConfig();
     void loadCalls();
   }, []);
 
-  async function loadConfig() {
-    setIsLoadingConfig(true);
-    try {
-      const response = await getCallingBotConfig();
-      setConfig(response);
-    } catch (error) {
-      setStatus({ type: "error", message: error.message });
-    } finally {
-      setIsLoadingConfig(false);
+  useEffect(() => {
+    const shouldPoll =
+      Boolean(expandedConversationReference) ||
+      Boolean(selectedCallReference) ||
+      calls.some((item) => ACTIVE_CALL_STATUSES.includes(item.status));
+
+    if (!shouldPoll) {
+      return undefined;
     }
-  }
+
+    const intervalId = window.setInterval(() => {
+      const preferredReference =
+        expandedConversationReference || selectedCallReference || "";
+      void loadCalls(preferredReference);
+    }, 5000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [calls, expandedConversationReference, selectedCallReference]);
 
   async function loadCalls(preferredReference = "") {
     setIsLoadingCalls(true);
@@ -159,6 +254,16 @@ function CallingBotAdminPage() {
     } catch (error) {
       setStatus({ type: "error", message: error.message });
     }
+  }
+
+  async function handleConversationToggle(callReference) {
+    if (expandedConversationReference === callReference) {
+      setExpandedConversationReference("");
+      return;
+    }
+
+    await loadCallDetail(callReference);
+    setExpandedConversationReference(callReference);
   }
 
   async function handleStartCall(event) {
@@ -259,7 +364,7 @@ function CallingBotAdminPage() {
         </p>
       </header>
 
-      <div className="stats-grid">
+      <div className="stats-grid stats-grid-calling">
         {metrics.map((item) => (
           <StatCard
             key={item.label}
@@ -275,55 +380,6 @@ function CallingBotAdminPage() {
           {status.message}
         </div>
       ) : null}
-
-      <SectionCard
-        title="Bot setup"
-        subtitle="Safe calling-bot configuration from the main backend."
-        actions={
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={loadConfig}
-            disabled={isLoadingConfig}
-          >
-            {isLoadingConfig ? "Refreshing..." : "Refresh config"}
-          </button>
-        }
-      >
-        {!config ? (
-          <EmptyState
-            title="No config loaded yet"
-            description="Refresh the bot setup to confirm the Twilio number, masked SID, and flow steps."
-          />
-        ) : (
-          <div className="calling-config-grid">
-            <article className="hero-mini-card">
-              <strong>{config.bot_name}</strong>
-              <p>{config.channel} · {config.mode}</p>
-            </article>
-            <article className="hero-mini-card">
-              <strong>From number</strong>
-              <p>{config.twilio_from_number || "Not configured"}</p>
-            </article>
-            <article className="hero-mini-card">
-              <strong>Default test target</strong>
-              <p>{config.twilio_test_to_number || "Not configured"}</p>
-            </article>
-            <article className="hero-mini-card">
-              <strong>Webhook base URL</strong>
-              <p>{config.webhook_base_url || "Not configured"}</p>
-            </article>
-            <article className="hero-mini-card">
-              <strong>Masked SID</strong>
-              <p>{config.masked_account_sid || "Not configured"}</p>
-            </article>
-            <article className="hero-mini-card">
-              <strong>Auth token</strong>
-              <p>{config.auth_token_configured ? "Configured" : "Missing"}</p>
-            </article>
-          </div>
-        )}
-      </SectionCard>
 
       <div className="content-grid">
         <SectionCard title="Start outbound call" subtitle="Create one customer call and hand the conversation to the bot.">
@@ -397,7 +453,7 @@ function CallingBotAdminPage() {
 
         <SectionCard
           title="Call register"
-          subtitle="Refresh and inspect each outbound call without copying the old dashboard exactly."
+          subtitle="View outbound call history with status, date, duration, and customer progress."
           actions={
             <button
               type="button"
@@ -417,25 +473,90 @@ function CallingBotAdminPage() {
           ) : (
             <div className="calling-call-list">
               {calls.map((item) => (
-                <button
-                  key={item.call_reference}
-                  type="button"
-                  className={
-                    item.call_reference === selectedCallReference
-                      ? "calling-call-item calling-call-item-active"
-                      : "calling-call-item"
-                  }
-                  onClick={() => loadCallDetail(item.call_reference)}
-                >
-                  <div className="calling-call-item-head">
-                    <strong>{item.customer_name}</strong>
-                    <span className="info-chip">{item.status}</span>
+                <article key={item.call_reference} className="calling-call-record">
+                  <button
+                    type="button"
+                    className={
+                      item.call_reference === selectedCallReference
+                        ? "calling-call-item calling-call-item-active"
+                        : "calling-call-item"
+                    }
+                    onClick={() => loadCallDetail(item.call_reference)}
+                  >
+                    <div className="calling-call-item-head">
+                      <div>
+                        <strong>{item.customer_name}</strong>
+                        <p className="calling-call-meta">
+                          {formatDateTime(item.created_at)} IST
+                        </p>
+                      </div>
+                      <span className="info-chip">{item.status}</span>
+                    </div>
+                    <p>{item.customer_phone}</p>
+                    <p>
+                      {item.selected_plan_name || "Plan not selected"} · {item.policy_number || "No policy yet"}
+                    </p>
+                    <p>
+                      Interest: {item.customer_interest || "unknown"} · Email status: {item.policy_email_status}
+                    </p>
+                    <p>
+                      Call duration: {formatDuration(getCallDurationSeconds(item))}
+                    </p>
+                    <p>
+                      Conversation lines: {selectedCallReference === item.call_reference && selectedCall ? selectedCall.transcript_lines.length : "-"}
+                    </p>
+                  </button>
+
+                  <div className="calling-call-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => handleConversationToggle(item.call_reference)}
+                    >
+                      {expandedConversationReference === item.call_reference
+                        ? "Hide conversation"
+                        : "View conversation"}
+                    </button>
                   </div>
-                  <p>{item.customer_phone}</p>
-                  <p>
-                    {item.selected_plan_name || "Plan not selected"} · {item.policy_number || "No policy yet"}
-                  </p>
-                </button>
+
+                  {expandedConversationReference === item.call_reference &&
+                  selectedCallReference === item.call_reference &&
+                  selectedCall ? (
+                    <div className="calling-call-conversation">
+                      <div className="section-card-header">
+                        <div>
+                          <h3>{selectedCall.customer_name} conversation</h3>
+                          <p>
+                            Full calling-bot exchange for this customer, stored under this call record.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="calling-transcript">
+                        {selectedCall.transcript_lines.length === 0 ? (
+                          <EmptyState
+                            title="No conversation captured yet"
+                            description="As the call progresses, the full customer and bot conversation will appear here."
+                          />
+                        ) : (
+                          selectedCall.transcript_lines.map((line, index) => {
+                            const transcriptItem = getTranscriptAppearance(line);
+                            return (
+                              <article
+                                key={`${selectedCall.call_reference}-${index}`}
+                                className={transcriptItem.className}
+                              >
+                                <span className="calling-transcript-role">
+                                  {transcriptItem.role}
+                                </span>
+                                <p>{transcriptItem.content}</p>
+                              </article>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
               ))}
             </div>
           )}
@@ -463,9 +584,9 @@ function CallingBotAdminPage() {
                   <p>{selectedCall.customer_interest}</p>
                 </article>
                 <article className="mini-card">
-                  <h4>Coverage</h4>
+                  <h4>Coverage and timing</h4>
                   <p>{formatCurrency(selectedCall.desired_coverage_amount)}</p>
-                  <p>Duration: {selectedCall.duration_seconds ?? "-"} seconds</p>
+                  <p>Duration: {formatDuration(getCallDurationSeconds(selectedCall))}</p>
                 </article>
                 <article className="mini-card">
                   <h4>Purchase</h4>
@@ -473,6 +594,30 @@ function CallingBotAdminPage() {
                   <p>{selectedCall.payment_status || "Payment not started"}</p>
                 </article>
               </div>
+
+              <SectionCard
+                title="Call history details"
+                subtitle="Track how long the call lasted and when it moved through the flow."
+              >
+                <div className="calling-history-grid">
+                  <article className="mini-card">
+                    <h4>Started</h4>
+                    <p>{formatDateTime(selectedCall.created_at)} IST</p>
+                  </article>
+                  <article className="mini-card">
+                    <h4>Last updated</h4>
+                    <p>{formatDateTime(selectedCall.updated_at)} IST</p>
+                  </article>
+                  <article className="mini-card">
+                    <h4>Completed</h4>
+                    <p>{formatDateTime(selectedCall.completed_at)} IST</p>
+                  </article>
+                  <article className="mini-card">
+                    <h4>Total duration</h4>
+                    <p>{formatDuration(getCallDurationSeconds(selectedCall))}</p>
+                  </article>
+                </div>
+              </SectionCard>
 
               <SectionCard title="Recommended plans" subtitle="Plan suggestions prepared after the customer gave a coverage amount.">
                 {selectedCall.recommended_plans.length === 0 ? (
@@ -523,7 +668,10 @@ function CallingBotAdminPage() {
                     <p><strong>Policy:</strong> {selectedCall.policy_number || "-"}</p>
                     <p><strong>Policy PDF:</strong> {selectedCall.policy_pdf_url || "-"}</p>
                     <p><strong>Policy email status:</strong> {selectedCall.policy_email_status}</p>
-                    <p><strong>Created:</strong> {formatDateTime(selectedCall.created_at)}</p>
+                    <p><strong>Created:</strong> {formatDateTime(selectedCall.created_at)} IST</p>
+                    <p><strong>Updated:</strong> {formatDateTime(selectedCall.updated_at)} IST</p>
+                    <p><strong>Completed:</strong> {formatDateTime(selectedCall.completed_at)} IST</p>
+                    <p><strong>Call duration:</strong> {formatDuration(getCallDurationSeconds(selectedCall))}</p>
                   </div>
 
                   <button
@@ -584,20 +732,6 @@ function CallingBotAdminPage() {
                 </div>
               </SectionCard>
 
-              <SectionCard title="Transcript and events" subtitle="Simple event history for the bot conversation and admin follow-up.">
-                {selectedCall.transcript_lines.length === 0 ? (
-                  <EmptyState
-                    title="No transcript lines yet"
-                    description="As the call progresses, the backend will append status changes and flow milestones here."
-                  />
-                ) : (
-                  <div className="calling-transcript">
-                    {selectedCall.transcript_lines.map((line, index) => (
-                      <p key={`${selectedCall.call_reference}-${index}`}>{line}</p>
-                    ))}
-                  </div>
-                )}
-              </SectionCard>
             </div>
           </div>
         )}

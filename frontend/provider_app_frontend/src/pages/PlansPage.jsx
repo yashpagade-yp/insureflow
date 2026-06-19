@@ -163,6 +163,15 @@ function PlansPage() {
 
   return (
     <div className="page-stack">
+      <section className="command-subhero">
+        <p className="eyebrow-text">Plan studio</p>
+        <h2>Publish products that the quote engine can trust instantly.</h2>
+        <p className="muted-copy">
+          Configure provider plans with cleaner structure, stronger pricing clarity,
+          and rider-ready product details for operational teams.
+        </p>
+      </section>
+
       {status.message ? (
         <div className={status.type === "error" ? "alert-box alert-error" : "alert-box alert-success"}>
           {status.message}

@@ -70,6 +70,7 @@ class RecommendedPlanSnapshot(BaseModel):
         plan_name: Recommended plan name.
         coverage_amount: Coverage amount on the plan.
         total_premium: Total premium shown to the caller.
+        add_on_summary: Short spoken add-on summary for the plan.
     """
 
     plan_id: str = PydanticField(..., description="Provider plan identifier")
@@ -77,6 +78,10 @@ class RecommendedPlanSnapshot(BaseModel):
     plan_name: str = PydanticField(..., description="Recommended plan name")
     coverage_amount: float = PydanticField(..., ge=0, description="Coverage amount on the plan")
     total_premium: float = PydanticField(..., ge=0, description="Total premium on the plan")
+    add_on_summary: str | None = PydanticField(
+        default=None,
+        description="Short spoken add-on summary for the plan",
+    )
 
 
 class CallingBotCall(Model):

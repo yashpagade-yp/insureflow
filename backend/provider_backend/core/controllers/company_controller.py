@@ -245,26 +245,28 @@ class CompanyController:
             api_key_hash = self._hash_api_key(self._generate_api_key())
 
         company = await self.company_crud.create(
-            CompanyModel(
-                company_name=normalized_company_name,
-                company_type=company_type,
-                created_by_admin_id=created_by_admin_id,
-                contact_person_name=(
-                    contact_person_name.strip()
-                    if contact_person_name is not None and contact_person_name.strip()
-                    else None
-                ),
-                contact_email=(
-                    contact_email.strip().lower()
-                    if contact_email is not None and contact_email.strip()
-                    else None
-                ),
-                contact_phone=(
-                    contact_phone.strip()
-                    if contact_phone is not None and contact_phone.strip()
-                    else None
-                ),
-                api_key_hash=api_key_hash or "",
+            CompanyModel.model_validate(
+                {
+                    "company_name": normalized_company_name,
+                    "company_type": company_type,
+                    "created_by_admin_id": created_by_admin_id,
+                    "contact_person_name": (
+                        contact_person_name.strip()
+                        if contact_person_name is not None and contact_person_name.strip()
+                        else None
+                    ),
+                    "contact_email": (
+                        contact_email.strip().lower()
+                        if contact_email is not None and contact_email.strip()
+                        else None
+                    ),
+                    "contact_phone": (
+                        contact_phone.strip()
+                        if contact_phone is not None and contact_phone.strip()
+                        else None
+                    ),
+                    "api_key_hash": api_key_hash or "",
+                }
             )
         )
         logging.info(

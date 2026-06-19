@@ -30,7 +30,7 @@ function AdminLayout() {
             Calling bot
           </NavLink>
           <NavLink
-            to="/admin/app/policy-hub"
+            to="/admin/app/policies"
             className={({ isActive }) => (isActive ? "portal-link portal-link-active" : "portal-link")}
           >
             Policies and tickets

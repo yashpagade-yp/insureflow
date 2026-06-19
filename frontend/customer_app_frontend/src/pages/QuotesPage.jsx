@@ -19,6 +19,32 @@ import {
 } from "../lib/storage";
 
 const FLOW_STEPS = ["Choose plan", "Add add-ons", "Payment", "Policy"];
+const PAYMENT_METHODS = [
+  {
+    id: "upi",
+    label: "UPI",
+    detail: "Pay instantly using any UPI app",
+    badge: "Popular",
+  },
+  {
+    id: "card",
+    label: "Credit or debit card",
+    detail: "Visa, Mastercard, RuPay and Amex supported",
+    badge: "Secure",
+  },
+  {
+    id: "netbanking",
+    label: "Net banking",
+    detail: "Use your bank account through online banking",
+    badge: "Trusted",
+  },
+  {
+    id: "wallet",
+    label: "Wallet",
+    detail: "Use your preferred wallet balance for payment",
+    badge: "Fast",
+  },
+];
 
 function formatCurrency(value) {
   return `Rs. ${Number(value || 0).toLocaleString()}`;
@@ -38,9 +64,7 @@ function StepBar({ currentStep }) {
               isComplete ? "journey-step-complete" : ""
             } ${isCurrent ? "journey-step-current" : ""}`}
           >
-            <span className="journey-step-index">
-              {isComplete ? "✓" : index + 1}
-            </span>
+            <span className="journey-step-index">{isComplete ? "OK" : index + 1}</span>
             <span>{label}</span>
           </div>
         );
@@ -82,6 +106,8 @@ function QuotesPage() {
   const [paymentState, setPaymentState] = useState({
     paymentReference: storedDraft?.paymentReference || "",
     mobileNumber: initialJourney.mobileNumber,
+    paymentMethod: storedDraft?.paymentMethod || "",
+    paymentStage: storedDraft?.paymentStage || "method-selection",
     otp: "",
     plainOtp: storedDraft?.plainOtp || "",
     otpExpiresAt: storedDraft?.otpExpiresAt || "",
@@ -97,6 +123,8 @@ function QuotesPage() {
       selectedPlanId,
       selectedAddOns,
       paymentReference: paymentState.paymentReference,
+      paymentMethod: paymentState.paymentMethod,
+      paymentStage: paymentState.paymentStage,
       plainOtp: paymentState.plainOtp,
       otpExpiresAt: paymentState.otpExpiresAt,
       currentStep,
@@ -106,7 +134,9 @@ function QuotesPage() {
     currentStep,
     journeyMeta,
     paymentState.otpExpiresAt,
+    paymentState.paymentMethod,
     paymentState.paymentReference,
+    paymentState.paymentStage,
     paymentState.plainOtp,
     policyNumber,
     selectedAddOns,
@@ -169,7 +199,8 @@ function QuotesPage() {
         }));
         setStatus({
           type: "error",
-          message: "This old journey is no longer available. Please start a fresh application or resume your latest saved policy journey.",
+          message:
+            "This old journey is no longer available. Please start a fresh application or resume your latest saved policy journey.",
         });
         return;
       }
@@ -244,6 +275,15 @@ function QuotesPage() {
           price: item.price,
         })),
       });
+      setPaymentState((currentValue) => ({
+        ...currentValue,
+        paymentReference: "",
+        paymentMethod: "",
+        paymentStage: "method-selection",
+        otp: "",
+        plainOtp: "",
+        otpExpiresAt: "",
+      }));
       setCurrentStep(2);
       setStatus({
         type: "success",
@@ -256,7 +296,7 @@ function QuotesPage() {
     }
   };
 
-  const handleSendPaymentOtp = async () => {
+  const handleSelectPaymentMethod = async (paymentMethodId) => {
     if (!paymentState.mobileNumber) {
       setStatus({
         type: "error",
@@ -285,13 +325,17 @@ function QuotesPage() {
       setPaymentState((currentValue) => ({
         ...currentValue,
         paymentReference,
+        paymentMethod: paymentMethodId,
+        paymentStage: "otp-verification",
         plainOtp: otpResponse.plain_otp || "",
         otpExpiresAt: otpResponse.otp_expires_at || "",
+        otp: "",
       }));
 
       setStatus({
         type: "success",
-        message: "Payment OTP sent. You can use the mock OTP shown below for testing.",
+        message:
+          "Payment request created successfully. OTP verification is now ready for this selected payment method.",
       });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
@@ -304,7 +348,7 @@ function QuotesPage() {
     if (!paymentState.paymentReference || !paymentState.otp) {
       setStatus({
         type: "error",
-        message: "Send the OTP first and then enter it to finish payment.",
+        message: "Choose a payment method first, then enter the OTP to finish payment.",
       });
       return;
     }
@@ -326,6 +370,45 @@ function QuotesPage() {
         message: "Payment successful. Your policy has been issued.",
       });
       removeStoredJourneyDraft();
+      } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBackToPaymentMethods = () => {
+    setPaymentState((currentValue) => ({
+      ...currentValue,
+      paymentStage: "method-selection",
+      otp: "",
+    }));
+  };
+
+  const handleResendPaymentOtp = async () => {
+    if (!paymentState.paymentReference || !paymentState.paymentMethod) {
+      setStatus({
+        type: "error",
+        message: "Choose a payment method before requesting another OTP.",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    setStatus({ type: "", message: "" });
+
+    try {
+      const otpResponse = await sendPaymentOtp(paymentState.paymentReference);
+      setPaymentState((currentValue) => ({
+        ...currentValue,
+        plainOtp: otpResponse.plain_otp || currentValue.plainOtp,
+        otpExpiresAt: otpResponse.otp_expires_at || "",
+        otp: "",
+      }));
+      setStatus({
+        type: "success",
+        message: "A fresh OTP has been generated for your selected payment method.",
+      });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
     } finally {
@@ -365,10 +448,11 @@ function QuotesPage() {
   return (
     <div className="page-stack customer-flow-page">
       <header className="page-header page-header-tight">
-        <p className="eyebrow-text">Health plans</p>
-        <h2>Choose the plan that protects you best.</h2>
+        <p className="eyebrow-text">Plan comparison and checkout</p>
+        <h2>Choose your health cover with confidence.</h2>
         <p className="page-copy">
-          Compare benefits, review optional add-ons, and complete your purchase in one smooth flow.
+          Review matching plans, add optional protection, and complete your purchase
+          with a clear step-by-step flow.
         </p>
       </header>
 
@@ -382,6 +466,23 @@ function QuotesPage() {
         >
           {status.message}
         </div>
+      ) : null}
+
+      {quoteData ? (
+        <section className="journey-overview-card journey-overview-card-compact">
+          <div className="journey-overview-copy">
+            <p className="eyebrow-text">Your application</p>
+            <h3>{journeyMeta.proposerName || "Customer application"}</h3>
+            <p className="muted-copy">
+              Requested coverage: {formatCurrency(journeyMeta.sumInsuredRequested || 0)}
+            </p>
+          </div>
+          <div className="journey-overview-steps">
+            <span>{visiblePlans.length} plans available to compare</span>
+            <span>Optional add-ons shown only after plan selection</span>
+            <span>Secure checkout with step-by-step payment verification</span>
+          </div>
+        </section>
       ) : null}
 
       {quoteData ? <StepBar currentStep={currentStep} /> : null}
@@ -448,7 +549,9 @@ function QuotesPage() {
                     </div>
                     <div>
                       <span>Policy term</span>
-                      <strong>{item.duration_years} year{item.duration_years > 1 ? "s" : ""}</strong>
+                      <strong>
+                        {item.duration_years} year{item.duration_years > 1 ? "s" : ""}
+                      </strong>
                     </div>
                   </div>
 
@@ -501,7 +604,7 @@ function QuotesPage() {
             <p className="eyebrow-text">Selected plan</p>
             <h3>{selectedPlan?.plan_name || "Chosen plan"}</h3>
             <p className="muted-copy">
-              {selectedPlan?.company_name || ""} · Base premium {formatCurrency(basePremium)}
+              {selectedPlan?.company_name || ""} - Base premium {formatCurrency(basePremium)}
             </p>
           </div>
 
@@ -559,8 +662,8 @@ function QuotesPage() {
 
       {quoteData && currentStep === 2 ? (
         <SectionCard
-          title="Complete your payment"
-          subtitle="Verify the payment using the mock OTP for this demo customer flow."
+          title="Secure checkout"
+          subtitle="Choose how you want to pay, then continue to OTP verification in a realistic purchase flow."
         >
           <div className="payment-layout">
             <div className="payment-summary-card">
@@ -591,6 +694,12 @@ function QuotesPage() {
                 <span>Total payable</span>
                 <strong>{formatCurrency(totalPremium)}</strong>
               </div>
+
+              <div className="payment-trust-stack">
+                <div className="payment-trust-chip">256-bit secure checkout</div>
+                <div className="payment-trust-chip">Insurer-ready payment flow</div>
+                <div className="payment-trust-chip">OTP verification required</div>
+              </div>
             </div>
 
             <div className="payment-action-card">
@@ -609,57 +718,114 @@ function QuotesPage() {
                 />
               </label>
 
-              {paymentState.plainOtp ? (
-                <div className="payment-otp-preview">
-                  <p className="eyebrow-text">Mock OTP</p>
-                  <h3>{paymentState.plainOtp}</h3>
-                  <p className="muted-copy">
-                    Use this demo OTP to complete the payment verification step.
-                  </p>
-                </div>
-              ) : null}
+              {paymentState.paymentStage === "method-selection" ? (
+                <>
+                  <div className="payment-methods-header">
+                    <div>
+                      <p className="eyebrow-text">Choose payment method</p>
+                      <h3>Select one secure payment option</h3>
+                      <p className="muted-copy">
+                        Continue with the method that feels most familiar for your insurance purchase.
+                      </p>
+                    </div>
+                  </div>
 
-              {paymentState.paymentReference ? (
-                <label className="field-label">
-                  <span>Enter OTP</span>
-                  <input
-                    className="field-input field-input-large"
-                    value={paymentState.otp}
-                    onChange={(event) =>
-                      setPaymentState((currentValue) => ({
-                        ...currentValue,
-                        otp: event.target.value,
-                      }))
-                    }
-                    placeholder="Enter OTP"
-                  />
-                </label>
-              ) : null}
+                  <div className="payment-method-grid">
+                    {PAYMENT_METHODS.map((method) => (
+                      <button
+                        key={method.id}
+                        type="button"
+                        className={
+                          paymentState.paymentMethod === method.id
+                            ? "payment-method-card payment-method-card-active"
+                            : "payment-method-card"
+                        }
+                        onClick={() => handleSelectPaymentMethod(method.id)}
+                        disabled={isLoading}
+                      >
+                        <div className="payment-method-head">
+                          <strong>{method.label}</strong>
+                          <span className="payment-method-badge">{method.badge}</span>
+                        </div>
+                        <p>{method.detail}</p>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="payment-checkout-note">
+                    <strong>Checkout note</strong>
+                    <p>
+                      After you choose a payment method, the payment request will be created and the verification step will open separately.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="payment-otp-stage-card">
+                    <p className="eyebrow-text">OTP verification</p>
+                    <h3>
+                      {PAYMENT_METHODS.find(
+                        (method) => method.id === paymentState.paymentMethod
+                      )?.label || "Selected payment method"}
+                    </h3>
+                    <p className="muted-copy">
+                      Your payment request is created. Continue with OTP verification to complete the purchase.
+                    </p>
+                    <div className="payment-otp-meta">
+                      <span>
+                        Payment reference: {paymentState.paymentReference || "-"}
+                      </span>
+                      <span>
+                        OTP status: {paymentState.otpExpiresAt ? "Generated in backend" : "Pending"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <label className="field-label">
+                    <span>Enter OTP</span>
+                    <input
+                      className="field-input field-input-large"
+                      value={paymentState.otp}
+                      onChange={(event) =>
+                        setPaymentState((currentValue) => ({
+                          ...currentValue,
+                          otp: event.target.value,
+                        }))
+                      }
+                      placeholder="Enter OTP"
+                    />
+                  </label>
+
+                  <div className="payment-checkout-note payment-checkout-note-soft">
+                    <strong>Demo behavior</strong>
+                    <p>
+                      OTP is handled by the backend flow. This customer screen no longer shows the OTP directly.
+                    </p>
+                  </div>
+                </>
+              )}
 
               <div className="button-row customer-flow-actions">
                 <button
                   type="button"
                   className="ghost-button"
-                  onClick={() => setCurrentStep(1)}
+                  onClick={() =>
+                    paymentState.paymentStage === "method-selection"
+                      ? setCurrentStep(1)
+                      : handleBackToPaymentMethods()
+                  }
                 >
-                  Back to add-ons
+                  {paymentState.paymentStage === "method-selection"
+                    ? "Back to add-ons"
+                    : "Back to payment methods"}
                 </button>
 
-                {!paymentState.paymentReference ? (
-                  <button
-                    type="button"
-                    className="primary-button"
-                    onClick={handleSendPaymentOtp}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? "Sending OTP..." : "Send payment OTP"}
-                  </button>
-                ) : (
+                {paymentState.paymentStage === "method-selection" ? null : (
                   <>
                     <button
                       type="button"
                       className="ghost-button"
-                      onClick={handleSendPaymentOtp}
+                      onClick={handleResendPaymentOtp}
                       disabled={isLoading}
                     >
                       Resend OTP
@@ -688,9 +854,14 @@ function QuotesPage() {
           <div className="completion-card">
             <div>
               <p className="eyebrow-text">Purchase complete</p>
-              <h3>{policyNumber ? `Policy number: ${policyNumber}` : "Policy issued successfully"}</h3>
+              <h3>
+                {policyNumber
+                  ? `Policy number: ${policyNumber}`
+                  : "Policy issued successfully"}
+              </h3>
               <p className="muted-copy">
-                You can now log in later with your mobile number and mock OTP to view your dashboard and access policy details.
+                You can now log in later with your mobile number and OTP to view your
+                dashboard and access policy details.
               </p>
             </div>
 

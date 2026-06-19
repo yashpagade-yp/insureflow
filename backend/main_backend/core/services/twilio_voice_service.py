@@ -62,9 +62,11 @@ class TwilioVoiceService:
             "conversation_steps": [
                 "Introduce InsureFlow clearly and explain why the customer is being called",
                 "Ask whether it is a good time to continue",
+                "Confirm the customer details already on record",
                 "Capture the desired coverage amount with short examples",
                 "Recommend matching plans from the database in simple language",
-                "Hand off the next purchase step for payment OTP and policy delivery",
+                "Confirm the selected plan and continue to payment OTP verification",
+                "Verify the OTP and confirm policy issuance details",
             ],
         }
 
@@ -166,6 +168,68 @@ class TwilioVoiceService:
         response.hangup()
         return str(response)
 
+    def build_detail_confirmation_response(
+        self,
+        customer_name: str,
+        customer_email: str | None,
+        detail_action_url: str,
+        retry: bool = False,
+    ) -> str:
+        """Build the TwiML prompt that confirms known customer details."""
+
+        response = VoiceResponse()
+        if retry:
+            self._append_say_lines(
+                response,
+                [
+                    "Sorry, I did not catch that clearly.",
+                    "Please confirm whether your details are still correct.",
+                ],
+            )
+        else:
+            self._append_say_lines(
+                response,
+                [
+                    f"Thank you {customer_name}.",
+                    "Before I continue, I want to confirm the details already on record.",
+                ],
+            )
+
+        gather = self._build_speech_gather(
+            action_url=detail_action_url,
+            num_digits=1,
+            hints="yes, no, correct, change, continue",
+        )
+        if customer_email:
+            self._append_say_lines(
+                gather,
+                [
+                    f"I have your name as {customer_name}.",
+                    f"I also have your email on record as {customer_email}.",
+                    "If these details are correct, press 1 or say yes.",
+                    "If they need to be changed, press 2 or say no.",
+                ],
+            )
+        else:
+            self._append_say_lines(
+                gather,
+                [
+                    f"I have your name as {customer_name}.",
+                    "If this is correct, press 1 or say yes.",
+                    "If this is not correct, press 2 or say no.",
+                ],
+            )
+        response.append(gather)
+        self._append_say_lines(
+            response,
+            [
+                "I could not confirm your details.",
+                "Our team can follow up with you later.",
+            ],
+        )
+        response.hangup()
+        return str(response)
+
     def build_interest_capture_response(
         self,
         coverage_action_url: str,
@@ -212,7 +276,11 @@ class TwilioVoiceService:
         response.hangup()
         return str(response)
 
-    def build_plan_summary_response(self, plan_summaries: list[str]) -> str:
+    def build_plan_summary_response(
+        self,
+        plan_summaries: list[str],
+        plan_choice_action_url: str | None = None,
+    ) -> str:
         """Build the TwiML response that reads matched plan summaries."""
 
         response = VoiceResponse()
@@ -235,14 +303,302 @@ class TwilioVoiceService:
             )
             for item in plan_summaries[:2]:
                 self._append_say_lines(response, [item])
+            if plan_choice_action_url:
+                gather = self._build_speech_gather(
+                    action_url=plan_choice_action_url,
+                    num_digits=1,
+                    hints="one, two, first plan, second plan, option one, option two",
+                )
+                self._append_say_lines(
+                    gather,
+                    [
+                        "If you want the first option, press 1 or say option one.",
+                        "If you want the second option, press 2 or say option two.",
+                    ],
+                )
+                response.append(gather)
+                self._append_say_lines(
+                    response,
+                    [
+                        "I could not capture your preferred option clearly.",
+                        "Our InsureFlow team will review the call and help you continue.",
+                    ],
+                )
+            else:
+                self._append_say_lines(
+                    response,
+                    [
+                        "Your matching plans are now ready in the InsureFlow system.",
+                        "Our admin team can continue the next step with you, including customer details, payment confirmation, and policy email delivery.",
+                        "Thank you for speaking with InsureFlow.",
+                    ],
+                )
+        response.hangup()
+        return str(response)
+
+    def build_plan_selection_retry_response(self, plan_choice_action_url: str) -> str:
+        """Build a retry prompt when the customer plan choice is unclear."""
+
+        response = VoiceResponse()
+        self._append_say_lines(
+            response,
+            [
+                "Sorry, I did not understand which plan you selected.",
+                "Please choose one of the plan options again.",
+            ],
+        )
+        gather = self._build_speech_gather(
+            action_url=plan_choice_action_url,
+            num_digits=1,
+            hints="one, two, first plan, second plan, option one, option two",
+        )
+        self._append_say_lines(
+            gather,
+            [
+                "Press 1 or say option one for the first plan.",
+                "Press 2 or say option two for the second plan.",
+            ],
+        )
+        response.append(gather)
+        self._append_say_lines(
+            response,
+            [
+                "I am ending this call for now.",
+                "Our team can follow up with you shortly.",
+            ],
+        )
+        response.hangup()
+        return str(response)
+
+    def build_selected_plan_next_step_response(
+        self,
+        selected_plan_name: str,
+    ) -> str:
+        """Build the spoken response after a customer chooses one plan."""
+
+        response = VoiceResponse()
+        self._append_say_lines(
+            response,
+            [
+                f"Thank you. You selected {selected_plan_name}.",
+                "I have recorded your choice in the InsureFlow system.",
+                "Our next step will continue from your confirmed customer details and move toward payment support.",
+                "Our team can now help you continue the purchase journey.",
+                "Thank you for speaking with InsureFlow.",
+            ],
+        )
+        response.hangup()
+        return str(response)
+
+    def build_payment_confirmation_response(
+        self,
+        selected_plan_name: str,
+        provider_company_name: str,
+        total_premium: float,
+        payment_confirmation_action_url: str,
+        add_on_summary: str | None = None,
+        retry: bool = False,
+    ) -> str:
+        """Build the prompt that asks whether the customer wants to continue."""
+
+        response = VoiceResponse()
+        if retry:
             self._append_say_lines(
                 response,
                 [
-                    "Your matching plans are now ready in the InsureFlow system.",
-                    "Our admin team can continue the next step with you, including customer details, payment confirmation, and policy email delivery.",
-                    "Thank you for speaking with InsureFlow.",
+                    "Sorry, I did not understand that clearly.",
+                    "Please confirm whether you want to continue with payment verification.",
                 ],
             )
+        else:
+            confirmation_lines = [
+                f"Thank you. You selected {selected_plan_name} from {provider_company_name}.",
+                f"The estimated premium is rupees {int(total_premium):,}.",
+            ]
+            if add_on_summary:
+                confirmation_lines.append(add_on_summary)
+            self._append_say_lines(response, confirmation_lines)
+
+        gather = self._build_speech_gather(
+            action_url=payment_confirmation_action_url,
+            num_digits=1,
+            hints="yes, no, continue, later, proceed, not now",
+        )
+        self._append_say_lines(
+            gather,
+            [
+                "If you want to continue with payment verification now, press 1 or say yes.",
+                "If you want to continue later, press 2 or say later.",
+            ],
+        )
+        response.append(gather)
+        self._append_say_lines(
+            response,
+            [
+                "I could not capture your response clearly.",
+                "Our team can follow up with you shortly.",
+            ],
+        )
+        response.hangup()
+        return str(response)
+
+    def build_payment_deferred_response(self) -> str:
+        """Build the response used when the customer defers payment continuation."""
+
+        response = VoiceResponse()
+        self._append_say_lines(
+            response,
+            [
+                "No problem.",
+                "I have saved your selected plan in the InsureFlow system.",
+                "Our team will help you continue the payment step later.",
+                "Thank you for your time.",
+            ],
+        )
+        response.hangup()
+        return str(response)
+
+    def build_payment_otp_capture_response(
+        self,
+        selected_plan_name: str,
+        total_premium: float,
+        payment_otp_action_url: str,
+        add_on_summary: str | None = None,
+        retry: bool = False,
+    ) -> str:
+        """Build the prompt that asks the customer for the payment OTP."""
+
+        response = VoiceResponse()
+        if retry:
+            self._append_say_lines(
+                response,
+                [
+                    "Sorry, I could not capture the OTP clearly.",
+                    "Please say each digit slowly, or enter the OTP on your keypad.",
+                ],
+            )
+        else:
+            otp_lines = [
+                f"We are continuing with {selected_plan_name}.",
+                f"The payable premium is rupees {int(total_premium):,}.",
+            ]
+            if add_on_summary:
+                otp_lines.append(add_on_summary)
+            otp_lines.append("A payment OTP has been sent for verification.")
+            self._append_say_lines(response, otp_lines)
+
+        gather = self._build_speech_gather(
+            action_url=payment_otp_action_url,
+            hints="zero, one, two, three, four, five, six, seven, eight, nine",
+        )
+        self._append_say_lines(
+            gather,
+            [
+                "Please say or enter the OTP now.",
+                "If you want to stop and continue later, say later.",
+            ],
+        )
+        response.append(gather)
+        self._append_say_lines(
+            response,
+            [
+                "I could not capture the OTP.",
+                "Our team can help you continue later.",
+            ],
+        )
+        response.hangup()
+        return str(response)
+
+    def build_payment_processing_response(
+        self,
+        payment_otp_action_url: str,
+    ) -> str:
+        """Build a short hold response while payment OTP preparation runs."""
+
+        response = VoiceResponse()
+        self._append_say_lines(
+            response,
+            [
+                "Thank you.",
+                "Please stay on the line while I prepare your secure payment verification.",
+            ],
+        )
+        response.pause(length=5)
+        response.redirect(payment_otp_action_url, method="POST")
+        return str(response)
+
+    def build_payment_otp_pending_response(
+        self,
+        payment_otp_action_url: str,
+    ) -> str:
+        """Build a short retry response while OTP preparation is still running."""
+
+        response = VoiceResponse()
+        self._append_say_lines(
+            response,
+            [
+                "Your payment verification is still being prepared.",
+                "Please stay with me for a moment.",
+            ],
+        )
+        response.pause(length=5)
+        response.redirect(payment_otp_action_url, method="POST")
+        return str(response)
+
+    def build_purchase_success_response(
+        self,
+        selected_plan_name: str,
+        policy_number: str,
+        customer_email: str | None,
+    ) -> str:
+        """Build the final success response after policy issuance."""
+
+        response = VoiceResponse()
+        success_lines = [
+            f"Thank you. Your payment has been verified for {selected_plan_name}.",
+            f"Your policy has been issued successfully. Your policy number is {policy_number}.",
+        ]
+        if customer_email:
+            success_lines.append(
+                f"We will also send the policy details to your email {customer_email}."
+            )
+        success_lines.extend(
+            [
+                "Thank you for choosing InsureFlow.",
+                "Have a great day.",
+            ]
+        )
+        self._append_say_lines(response, success_lines)
+        response.hangup()
+        return str(response)
+
+    def build_purchase_failure_response(self) -> str:
+        """Build the response used when the payment or policy step fails."""
+
+        response = VoiceResponse()
+        self._append_say_lines(
+            response,
+            [
+                "I could not complete the purchase verification right now.",
+                "Our support team will review your request and help you continue shortly.",
+                "Thank you for your patience.",
+            ],
+        )
+        response.hangup()
+        return str(response)
+
+    def build_detail_correction_handoff_response(self) -> str:
+        """Build the response when the customer says their details need correction."""
+
+        response = VoiceResponse()
+        self._append_say_lines(
+            response,
+            [
+                "Thank you for letting us know.",
+                "Our team will help review and correct your details before continuing the journey.",
+                "We will follow up with you shortly.",
+            ],
+        )
         response.hangup()
         return str(response)
 

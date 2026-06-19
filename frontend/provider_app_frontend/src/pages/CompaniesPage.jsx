@@ -141,6 +141,15 @@ function CompaniesPage() {
 
   return (
     <div className="page-stack">
+      <section className="command-subhero">
+        <p className="eyebrow-text">Company network</p>
+        <h2>Build and govern the provider-side partner network.</h2>
+        <p className="muted-copy">
+          Register buyer systems, onboard insurance carriers, hand off API access safely,
+          and control which provider companies are active in the live quote ecosystem.
+        </p>
+      </section>
+
       {formStatus.message ? (
         <div
           className={

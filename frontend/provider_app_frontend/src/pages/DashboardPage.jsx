@@ -25,14 +25,19 @@ function DashboardPage() {
       setErrorMessage("");
 
       try {
-        const [buyerResponse, providerResponse, planResponse, quoteResponse, paymentResponse] =
-          await Promise.all([
-            listBuyerCompanies(),
-            listProviderCompanies(),
-            listPlans(),
-            listQuotes(),
-            listPayments(),
-          ]);
+        const [
+          buyerResponse,
+          providerResponse,
+          planResponse,
+          quoteResponse,
+          paymentResponse,
+        ] = await Promise.all([
+          listBuyerCompanies(),
+          listProviderCompanies(),
+          listPlans(),
+          listQuotes(),
+          listPayments(),
+        ]);
 
         setCompanies([
           ...(buyerResponse.items ?? []),
@@ -51,53 +56,120 @@ function DashboardPage() {
     loadDashboardData();
   }, []);
 
-  const dashboardStats = useMemo(() => {
-    const activeCompanies = companies.filter((item) => item.is_active).length;
-    const buyerCompanies = companies.filter(
-      (item) => item.company_type === "buyer"
-    ).length;
-    const providerCompanies = companies.filter(
-      (item) => item.company_type === "provider"
-    ).length;
+  const providerCompanies = companies.filter(
+    (item) => item.company_type === "provider"
+  );
+  const buyerCompanies = companies.filter((item) => item.company_type === "buyer");
+  const activeCompanies = companies.filter((item) => item.is_active);
+  const selectedQuotes = quotes.filter((item) => item.selected_plan_id);
+  const successfulPayments = payments.filter(
+    (item) => String(item.payment_status || "").toLowerCase() === "verified"
+  );
 
-    return [
+  const dashboardStats = useMemo(
+    () => [
       {
-        label: "Registered companies",
+        label: "Network companies",
         value: companies.length,
-        helper: `${activeCompanies} active across buyer and provider roles`,
+        helper: `${activeCompanies.length} active companies currently connected`,
       },
       {
-        label: "Buyer companies",
-        value: buyerCompanies,
-        helper: "Mediator and buyer companies registered for API communication",
+        label: "Provider carriers",
+        value: providerCompanies.length,
+        helper: "Insurance carriers available for publishing plans",
       },
       {
-        label: "Provider companies",
-        value: providerCompanies,
-        helper: "Insurance carriers available for plan publishing",
+        label: "Buyer partners",
+        value: buyerCompanies.length,
+        helper: "Mediator or buyer systems integrated with provider APIs",
       },
       {
         label: "Published plans",
         value: plans.length,
-        helper: "Plan inventory currently available to quote generation",
+        helper: "Plan inventory available to quote generation",
       },
       {
-        label: "Live activity",
+        label: "Live journeys",
         value: quotes.length + payments.length,
-        helper: `${quotes.length} quotes and ${payments.length} payments seen on the provider side`,
+        helper: `${selectedQuotes.length} selected quotes and ${successfulPayments.length} verified payments`,
       },
-    ];
-  }, [companies, payments.length, plans.length, quotes.length]);
+    ],
+    [
+      activeCompanies.length,
+      buyerCompanies.length,
+      companies.length,
+      payments.length,
+      plans.length,
+      providerCompanies.length,
+      quotes.length,
+      selectedQuotes.length,
+      successfulPayments.length,
+    ]
+  );
 
   return (
     <div className="page-stack">
-      <header className="page-intro">
-        <p className="eyebrow-text">Provider-admin overview</p>
-        <h2>Better coverage begins with clear decisions, trusted partners, and care that reaches people on time.</h2>
-        <p className="muted-copy">
-          Build a health-insurance network that feels dependable from the first onboarding step to the final policy purchase.
-        </p>
-      </header>
+      <section className="command-hero">
+        <div className="command-hero-copy">
+          <p className="eyebrow-text">Provider command center</p>
+          <h2>Operate the insurer side with confidence, speed, and clean control.</h2>
+          <p>
+            This workspace is for internal provider teams. It keeps company onboarding,
+            plan publishing, quote activity, and payment-side visibility in one sharper,
+            data-first console that stays visually separate from the customer experience.
+          </p>
+          <div className="hero-chip-row">
+            <span className="hero-chip">Carrier network</span>
+            <span className="hero-chip">Plan publishing</span>
+            <span className="hero-chip">Quote intelligence</span>
+            <span className="hero-chip">Payment visibility</span>
+          </div>
+        </div>
+
+        <div className="command-hero-side">
+          <div className="metric-strip">
+            <div className="metric-cell">
+              <span>Active network</span>
+              <strong>{activeCompanies.length}</strong>
+            </div>
+            <div className="metric-cell">
+              <span>Plans live</span>
+              <strong>{plans.length}</strong>
+            </div>
+            <div className="metric-cell">
+              <span>Quotes tracked</span>
+              <strong>{quotes.length}</strong>
+            </div>
+            <div className="metric-cell">
+              <span>Payments tracked</span>
+              <strong>{payments.length}</strong>
+            </div>
+          </div>
+
+          <div className="activity-card section-card">
+            <div className="section-card-header">
+              <div>
+                <h3>Operational focus</h3>
+                <p>Keep the provider backend healthy and ready for high-trust customer journeys.</p>
+              </div>
+            </div>
+            <div className="company-board">
+              <div className="company-board-cell">
+                <span>Onboarding</span>
+                <strong>Buyer + provider setup</strong>
+              </div>
+              <div className="company-board-cell">
+                <span>Products</span>
+                <strong>Coverage, benefits, riders</strong>
+              </div>
+              <div className="company-board-cell">
+                <span>Operations</span>
+                <strong>Quotes and payments</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="stats-grid">
         {dashboardStats.map((item) => (
@@ -112,35 +184,37 @@ function DashboardPage() {
 
       {errorMessage ? <div className="alert-box alert-error">{errorMessage}</div> : null}
 
-      <SectionCard title="Provider promise" subtitle="The work here supports a smoother, more trustworthy insurance experience.">
-        <div className="banner-grid">
-          <article className="hero-mini-card">
-            <strong>Trust starts early</strong>
-            <p>Strong onboarding creates a cleaner path for every company, every plan, and every future customer.</p>
+      <SectionCard
+        title="Why this provider workspace exists"
+        subtitle="A provider-facing console should feel operational, reliable, and clearly distinct from the customer app."
+      >
+        <div className="spotlight-grid">
+          <article className="spotlight-card">
+            <h4>Internal-first by design</h4>
+            <p>Dense operational information belongs here, not in the customer-facing journey.</p>
           </article>
-          <article className="hero-mini-card">
-            <strong>Good networks matter</strong>
-            <p>The right insurer relationships turn technical setup into real protection that people can rely on.</p>
+          <article className="spotlight-card">
+            <h4>Fast decisions</h4>
+            <p>Provider admins need pricing, plan, and activity signals close together to act quickly.</p>
           </article>
-          <article className="hero-mini-card">
-            <strong>Clarity builds confidence</strong>
-            <p>Well-structured plans and add-ons help teams explain value with confidence and consistency.</p>
-          </article>
-          <article className="hero-mini-card">
-            <strong>Care should feel seamless</strong>
-            <p>When quotes and payments move smoothly, the insurance journey feels faster, safer, and more reassuring.</p>
+          <article className="spotlight-card">
+            <h4>Cleaner coordination</h4>
+            <p>When network, product, and operations views are aligned, downstream quote and payment flows become easier to trust.</p>
           </article>
         </div>
       </SectionCard>
 
       <div className="content-grid">
-        <SectionCard title="Recent companies" subtitle="Buyer-company and provider-company registrations from the backend.">
+        <SectionCard
+          title="Recent network activity"
+          subtitle="Latest buyer and provider companies visible from the provider backend."
+        >
           {isLoading ? (
-            <p className="muted-copy">Loading companies...</p>
+            <p className="muted-copy">Loading company network...</p>
           ) : companies.length === 0 ? (
             <EmptyState
               title="No companies yet"
-              description="Register the buyer app and provider companies from the Companies page."
+              description="Register buyer companies and provider carriers from the company network page."
             />
           ) : (
             <div className="list-stack">
@@ -148,24 +222,32 @@ function DashboardPage() {
                 <article key={`${company.company_name}-${company.company_type}`} className="list-card">
                   <div>
                     <h4>{company.company_name}</h4>
-                    <p>{company.company_type} · {company.contact_email || "No contact email"}</p>
+                    <p>{company.contact_email || "No contact email"} · {company.contact_phone || "No phone"}</p>
                   </div>
-                  <span className={company.is_active ? "status-pill status-active" : "status-pill"}>
-                    {company.is_active ? "Active" : "Inactive"}
-                  </span>
+                  <div className="chip-list">
+                    <span className={company.company_type === "provider" ? "role-pill role-provider" : "role-pill role-mediator"}>
+                      {company.company_type}
+                    </span>
+                    <span className={company.is_active ? "status-pill status-active" : "status-pill"}>
+                      {company.is_active ? "Active" : "Inactive"}
+                    </span>
+                  </div>
                 </article>
               ))}
             </div>
           )}
         </SectionCard>
 
-        <SectionCard title="Recent plans" subtitle="Published plan records exposed to quote generation.">
+        <SectionCard
+          title="Published plan inventory"
+          subtitle="Recently available provider plans and their pricing state."
+        >
           {isLoading ? (
-            <p className="muted-copy">Loading plans...</p>
+            <p className="muted-copy">Loading plan inventory...</p>
           ) : plans.length === 0 ? (
             <EmptyState
               title="No plans yet"
-              description="Create the first provider plan from the Plans page."
+              description="Publish your first provider plan from the plan studio."
             />
           ) : (
             <div className="list-stack">
@@ -175,7 +257,9 @@ function DashboardPage() {
                     <h4>{plan.plan_name}</h4>
                     <p>{plan.company_name} · {plan.plan_code}</p>
                   </div>
-                  <strong className="currency-value">Rs. {plan.base_premium.toLocaleString()}</strong>
+                  <strong className="currency-value">
+                    Rs. {Number(plan.base_premium || 0).toLocaleString()}
+                  </strong>
                 </article>
               ))}
             </div>
@@ -183,14 +267,17 @@ function DashboardPage() {
         </SectionCard>
       </div>
 
-      <div className="content-grid">
-        <SectionCard title="Provider-side quotes" subtitle="Latest quote journeys visible to the provider admin.">
+      <div className="operations-stack">
+        <SectionCard
+          title="Quote-side visibility"
+          subtitle="Provider-side quote documents flowing in from completed buyer journeys."
+        >
           {isLoading ? (
-            <p className="muted-copy">Loading quotes...</p>
+            <p className="muted-copy">Loading quote activity...</p>
           ) : quotes.length === 0 ? (
             <EmptyState
               title="No quotes yet"
-              description="Quotes will appear once the customer app submits a completed form and asks the provider backend for plan matches."
+              description="Quotes will appear here after customer journeys request provider plan matches."
             />
           ) : (
             <div className="table-wrap">
@@ -198,16 +285,16 @@ function DashboardPage() {
                 <thead>
                   <tr>
                     <th>Transaction</th>
-                    <th>Selected plan</th>
                     <th>Items</th>
+                    <th>Selected plan</th>
                   </tr>
                 </thead>
                 <tbody>
                   {quotes.slice(0, 8).map((quote) => (
                     <tr key={quote.transaction_id}>
                       <td>{quote.transaction_id}</td>
-                      <td>{quote.selected_plan_id || "-"}</td>
                       <td>{quote.items.length}</td>
+                      <td>{quote.selected_plan_id || "-"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -216,13 +303,16 @@ function DashboardPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Provider-side payments" subtitle="Latest payment records processed by the provider backend.">
+        <SectionCard
+          title="Payment-side visibility"
+          subtitle="Provider-side payment records generated as customers move toward verification."
+        >
           {isLoading ? (
-            <p className="muted-copy">Loading payments...</p>
+            <p className="muted-copy">Loading payment activity...</p>
           ) : payments.length === 0 ? (
             <EmptyState
               title="No payments yet"
-              description="Provider-side payment records will appear here after a customer reaches the payment verification step."
+              description="Payment records will appear here after the customer journey reaches payment processing."
             />
           ) : (
             <div className="table-wrap">

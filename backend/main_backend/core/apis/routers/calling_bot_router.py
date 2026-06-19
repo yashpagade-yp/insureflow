@@ -341,6 +341,47 @@ async def process_interest_capture(
 
 
 @calling_bot_router.post(
+    "/v1/calling-bot/twiml/outbound/{call_reference}/confirm-details",
+    status_code=status.HTTP_200_OK,
+)
+async def process_detail_confirmation(
+    call_reference: str,
+    Digits: str | None = Form(default=None),
+    SpeechResult: str | None = Form(default=None),
+) -> Response:
+    """Confirm known customer details and return the next TwiML prompt."""
+
+    try:
+        logging.info(
+            "Calling POST /v1/calling-bot/twiml/outbound/%s/confirm-details endpoint",
+            call_reference,
+        )
+        twiml = await calling_bot_controller.process_detail_confirmation_response(
+            call_reference=call_reference,
+            digits=Digits,
+            speech_result=SpeechResult,
+        )
+        return Response(content=twiml, media_type="application/xml")
+    except HTTPException as httperror:
+        logging.error(
+            "Error in POST /v1/calling-bot/twiml/outbound/%s/confirm-details endpoint: %s",
+            call_reference,
+            httperror,
+        )
+        raise httperror
+    except Exception as error:
+        logging.error(
+            "Error in POST /v1/calling-bot/twiml/outbound/%s/confirm-details endpoint: %s",
+            call_reference,
+            error,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to confirm the calling-bot customer details.",
+        )
+
+
+@calling_bot_router.post(
     "/v1/calling-bot/twiml/outbound/{call_reference}/coverage",
     status_code=status.HTTP_200_OK,
 )
@@ -378,6 +419,129 @@ async def process_coverage_capture(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process the calling-bot coverage capture.",
+        )
+
+
+@calling_bot_router.post(
+    "/v1/calling-bot/twiml/outbound/{call_reference}/plan-choice",
+    status_code=status.HTTP_200_OK,
+)
+async def process_plan_choice_capture(
+    call_reference: str,
+    Digits: str | None = Form(default=None),
+    SpeechResult: str | None = Form(default=None),
+) -> Response:
+    """Capture the customer's selected plan and return the next TwiML prompt."""
+
+    try:
+        logging.info(
+            "Calling POST /v1/calling-bot/twiml/outbound/%s/plan-choice endpoint",
+            call_reference,
+        )
+        twiml = await calling_bot_controller.process_plan_selection_response(
+            call_reference=call_reference,
+            digits=Digits,
+            speech_result=SpeechResult,
+        )
+        return Response(content=twiml, media_type="application/xml")
+    except HTTPException as httperror:
+        logging.error(
+            "Error in POST /v1/calling-bot/twiml/outbound/%s/plan-choice endpoint: %s",
+            call_reference,
+            httperror,
+        )
+        raise httperror
+    except Exception as error:
+        logging.error(
+            "Error in POST /v1/calling-bot/twiml/outbound/%s/plan-choice endpoint: %s",
+            call_reference,
+            error,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process the calling-bot plan selection.",
+        )
+
+
+@calling_bot_router.post(
+    "/v1/calling-bot/twiml/outbound/{call_reference}/payment-confirmation",
+    status_code=status.HTTP_200_OK,
+)
+async def process_payment_confirmation_capture(
+    call_reference: str,
+    Digits: str | None = Form(default=None),
+    SpeechResult: str | None = Form(default=None),
+) -> Response:
+    """Capture whether the customer wants to continue payment verification now."""
+
+    try:
+        logging.info(
+            "Calling POST /v1/calling-bot/twiml/outbound/%s/payment-confirmation endpoint",
+            call_reference,
+        )
+        twiml = await calling_bot_controller.process_payment_confirmation_response(
+            call_reference=call_reference,
+            digits=Digits,
+            speech_result=SpeechResult,
+        )
+        return Response(content=twiml, media_type="application/xml")
+    except HTTPException as httperror:
+        logging.error(
+            "Error in POST /v1/calling-bot/twiml/outbound/%s/payment-confirmation endpoint: %s",
+            call_reference,
+            httperror,
+        )
+        raise httperror
+    except Exception as error:
+        logging.error(
+            "Error in POST /v1/calling-bot/twiml/outbound/%s/payment-confirmation endpoint: %s",
+            call_reference,
+            error,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process the calling-bot payment confirmation step.",
+        )
+
+
+@calling_bot_router.post(
+    "/v1/calling-bot/twiml/outbound/{call_reference}/payment-otp",
+    status_code=status.HTTP_200_OK,
+)
+async def process_payment_otp_capture(
+    call_reference: str,
+    Digits: str | None = Form(default=None),
+    SpeechResult: str | None = Form(default=None),
+) -> Response:
+    """Capture the payment OTP and continue the purchase flow."""
+
+    try:
+        logging.info(
+            "Calling POST /v1/calling-bot/twiml/outbound/%s/payment-otp endpoint",
+            call_reference,
+        )
+        twiml = await calling_bot_controller.process_payment_otp_response(
+            call_reference=call_reference,
+            digits=Digits,
+            speech_result=SpeechResult,
+        )
+        return Response(content=twiml, media_type="application/xml")
+    except HTTPException as httperror:
+        logging.error(
+            "Error in POST /v1/calling-bot/twiml/outbound/%s/payment-otp endpoint: %s",
+            call_reference,
+            httperror,
+        )
+        raise httperror
+    except Exception as error:
+        logging.error(
+            "Error in POST /v1/calling-bot/twiml/outbound/%s/payment-otp endpoint: %s",
+            call_reference,
+            error,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process the calling-bot payment OTP step.",
         )
 
 
