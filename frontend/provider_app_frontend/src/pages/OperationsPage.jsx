@@ -15,7 +15,16 @@ function formatDateTime(value) {
   }
 
   try {
-    return new Date(value).toLocaleString();
+    return new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    }).format(new Date(value));
   } catch {
     return value;
   }
@@ -83,14 +92,14 @@ function OperationsPage() {
 
   return (
     <div className="page-stack">
-      <header className="page-intro">
-        <p className="eyebrow-text">Provider-side monitoring</p>
-        <h2>Inspect live quote journeys and payment records from the provider backend.</h2>
+      <section className="command-subhero">
+        <p className="eyebrow-text">Live operations</p>
+        <h2>Inspect the provider-side quote and payment pipeline in real time.</h2>
         <p className="muted-copy">
-          Use this page when you want direct operational visibility into the provider-side
-          quote generation and payment verification activity that comes from the buyer app.
+          This is the operations layer of the provider app: transaction lookups, payment checks,
+          and activity monitoring without customer-facing styling.
         </p>
-      </header>
+      </section>
 
       {status.message ? (
         <div className={status.type === "error" ? "alert-box alert-error" : "alert-box alert-success"}>
@@ -141,7 +150,7 @@ function OperationsPage() {
                 <p><strong>Transaction:</strong> {selectedQuote.transaction_id}</p>
                 <p><strong>Selected plan:</strong> {selectedQuote.selected_plan_id || "-"}</p>
                 <p><strong>Quote items:</strong> {selectedQuote.items.length}</p>
-                <p><strong>Updated:</strong> {formatDateTime(selectedQuote.updated_at)}</p>
+                <p><strong>Updated:</strong> {formatDateTime(selectedQuote.updated_at)} IST</p>
               </div>
             ) : null}
           </div>
@@ -163,7 +172,7 @@ function OperationsPage() {
                 <p><strong>Reference:</strong> {selectedPayment.payment_reference}</p>
                 <p><strong>Status:</strong> {selectedPayment.payment_status}</p>
                 <p><strong>Amount:</strong> Rs. {Number(selectedPayment.amount || 0).toLocaleString()}</p>
-                <p><strong>Updated:</strong> {formatDateTime(selectedPayment.updated_at)}</p>
+                <p><strong>Updated:</strong> {formatDateTime(selectedPayment.updated_at)} IST</p>
               </div>
             ) : null}
           </div>
@@ -194,7 +203,7 @@ function OperationsPage() {
                       <td>{quote.transaction_id}</td>
                       <td>{quote.selected_plan_id || "-"}</td>
                       <td>{quote.items.length}</td>
-                      <td>{formatDateTime(quote.updated_at)}</td>
+                      <td>{formatDateTime(quote.updated_at)} IST</td>
                     </tr>
                   ))}
                 </tbody>

@@ -1,0 +1,81 @@
+services:
+  main_backend:
+    build:
+      context: ./backend/main_backend
+    container_name: insureflow-main-backend
+    env_file:
+      - ./backend/main_backend/.env
+    environment:
+      PROVIDER_BACKEND_URL: http://provider_backend:8001
+    ports:
+      - "8000:8000"
+    volumes:
+      - main-backend-generated-policies:/app/generated_policies
+    depends_on:
+      - provider_backend
+
+  provider_backend:
+    build:
+      context: ./backend/provider_backend
+    container_name: insureflow-provider-backend
+    env_file:
+      - ./backend/provider_backend/.env
+    ports:
+      - "8001:8001"
+
+  customer_app_frontend:
+    build:
+      context: ./frontend/customer_app_frontend
+      args:
+        VITE_MAIN_API_BASE_URL: http://localhost:8000
+        VITE_BOT_BASE_URL: http://localhost:8002
+    container_name: insureflow-customer-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - main_backend
+      - bot
+
+  provider_app_frontend:
+    build:
+      context: ./frontend/provider_app_frontend
+      args:
+        VITE_PROVIDER_API_BASE_URL: http://localhost:8001
+    container_name: insureflow-provider-frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      - provider_backend
+
+  mcp:
+    build:
+      context: ./mcp
+    container_name: insureflow-mcp
+    environment:
+      MAIN_BACKEND_URL: http://main_backend:8000
+      PROVIDER_BACKEND_URL: http://provider_backend:8001
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - main_backend
+      - provider_backend
+
+  bot:
+    build:
+      context: ./bot
+    container_name: insureflow-bot
+    env_file:
+      - ./bot/.env
+    environment:
+      MCP_SERVER_URL: http://mcp:8080/mcp
+      BOT_HOST: 0.0.0.0
+      BOT_PORT: 8002
+    ports:
+      - "8002:8002"
+    depends_on:
+      - mcp
+
+volumes:
+  main-backend-generated-policies:

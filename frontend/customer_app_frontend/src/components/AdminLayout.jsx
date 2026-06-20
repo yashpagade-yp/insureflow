@@ -24,7 +24,13 @@ function AdminLayout() {
             Operations
           </NavLink>
           <NavLink
-            to="/admin/app/policy-hub"
+            to="/admin/app/calling-bot"
+            className={({ isActive }) => (isActive ? "portal-link portal-link-active" : "portal-link")}
+          >
+            Calling bot
+          </NavLink>
+          <NavLink
+            to="/admin/app/policies"
             className={({ isActive }) => (isActive ? "portal-link portal-link-active" : "portal-link")}
           >
             Policies and tickets

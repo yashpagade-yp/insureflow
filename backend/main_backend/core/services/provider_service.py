@@ -23,6 +23,29 @@ def _get_provider_backend_url() -> str:
     return os.getenv("PROVIDER_BACKEND_URL", "http://localhost:5200").strip()
 
 
+def _get_provider_backend_candidates() -> list[str]:
+    """Return provider-backend base URLs in the order they should be tried."""
+
+    configured_url = _get_provider_backend_url()
+    candidate_urls = [
+        configured_url,
+        "http://localhost:5200",
+        "http://127.0.0.1:5200",
+        "http://localhost:8001",
+        "http://127.0.0.1:8001",
+    ]
+
+    normalized_candidates: list[str] = []
+    seen_urls: set[str] = set()
+    for candidate_url in candidate_urls:
+        normalized_url = candidate_url.strip().rstrip("/")
+        if not normalized_url or normalized_url in seen_urls:
+            continue
+        normalized_candidates.append(normalized_url)
+        seen_urls.add(normalized_url)
+    return normalized_candidates
+
+
 def _get_provider_api_key() -> str:
     """Read and normalize the inter-service API key from the environment."""
 
@@ -96,34 +119,82 @@ def _handle_provider_response(response: httpx.Response, context: str) -> dict[st
 class ProviderService:
     """Encapsulates HTTP communication from main backend to provider backend."""
 
+    async def _send_request(
+        self,
+        *,
+        method: str,
+        endpoint_path: str,
+        context: str,
+        json_body: dict[str, Any] | None = None,
+        timeout_seconds: float = 10.0,
+    ) -> dict[str, Any]:
+        """Send one provider-backend request with fallback base URLs."""
+
+        provider_backend_candidates = _get_provider_backend_candidates()
+        logging.info(
+            "Calling provider backend for %s | candidates=%s",
+            context,
+            provider_backend_candidates,
+        )
+
+        last_connect_error: httpx.ConnectError | None = None
+
+        try:
+            async with httpx.AsyncClient() as client:
+                for provider_backend_url in provider_backend_candidates:
+                    try:
+                        response = await client.request(
+                            method=method,
+                            url=f"{provider_backend_url}{endpoint_path}",
+                            json=json_body,
+                            headers=_get_auth_headers(),
+                            timeout=timeout_seconds,
+                        )
+                        return _handle_provider_response(response, context)
+                    except httpx.ConnectError as connect_error:
+                        last_connect_error = connect_error
+                        logging.warning(
+                            "Cannot reach provider backend for %s at %s",
+                            context,
+                            provider_backend_url,
+                        )
+        except HTTPException:
+            raise
+        except Exception as error:
+            logging.error(
+                "Unexpected error while preparing provider request for %s: %s",
+                context,
+                error,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to communicate with provider service.",
+            )
+
+        logging.error(
+            "Cannot reach any provider backend candidate for %s. Last error: %s",
+            context,
+            last_connect_error,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Provider service is currently unreachable. Please try again later.",
+        )
+
     async def generate_quotes(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Call the provider backend to generate quotes for a transaction."""
 
         context = f"generate_quotes for transaction {payload.get('transaction_id')}"
-        provider_backend_url = _get_provider_backend_url()
-        logging.info(
-            "Calling provider backend: %s | base_url=%s",
-            context,
-            provider_backend_url,
-        )
-
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{provider_backend_url}/v1/quotes/generate",
-                    json=payload,
-                    headers=_get_auth_headers(),
-                    timeout=15.0,
-                )
-            return _handle_provider_response(response, context)
+            return await self._send_request(
+                method="POST",
+                endpoint_path="/v1/quotes/generate",
+                context=context,
+                json_body=payload,
+                timeout_seconds=15.0,
+            )
         except HTTPException:
             raise
-        except httpx.ConnectError:
-            logging.error("Cannot reach provider backend for %s", context)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Provider service is currently unreachable. Please try again later.",
-            )
         except Exception as error:
             logging.error("Unexpected error in ProviderService.generate_quotes: %s", error)
             raise HTTPException(
@@ -135,29 +206,15 @@ class ProviderService:
         """Call the provider backend to fetch generated quotes for a transaction."""
 
         context = f"get_quotes for transaction {transaction_id}"
-        provider_backend_url = _get_provider_backend_url()
-        logging.info(
-            "Calling provider backend: %s | base_url=%s",
-            context,
-            provider_backend_url,
-        )
-
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{provider_backend_url}/v1/quotes/{transaction_id}",
-                    headers=_get_auth_headers(),
-                    timeout=10.0,
-                )
-            return _handle_provider_response(response, context)
+            return await self._send_request(
+                method="GET",
+                endpoint_path=f"/v1/quotes/{transaction_id}",
+                context=context,
+                timeout_seconds=10.0,
+            )
         except HTTPException:
             raise
-        except httpx.ConnectError:
-            logging.error("Cannot reach provider backend for %s", context)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Provider service is currently unreachable. Please try again later.",
-            )
         except Exception as error:
             logging.error("Unexpected error in ProviderService.get_quotes: %s", error)
             raise HTTPException(
@@ -169,29 +226,15 @@ class ProviderService:
         """Call the provider backend to mark a plan as selected."""
 
         context = f"select_plan {selected_plan_id} for transaction {transaction_id}"
-        provider_backend_url = _get_provider_backend_url()
-        logging.info(
-            "Calling provider backend: %s | base_url=%s",
-            context,
-            provider_backend_url,
-        )
-
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{provider_backend_url}/v1/quotes/{transaction_id}/select-plan/{selected_plan_id}",
-                    headers=_get_auth_headers(),
-                    timeout=10.0,
-                )
-            return _handle_provider_response(response, context)
+            return await self._send_request(
+                method="POST",
+                endpoint_path=f"/v1/quotes/{transaction_id}/select-plan/{selected_plan_id}",
+                context=context,
+                timeout_seconds=10.0,
+            )
         except HTTPException:
             raise
-        except httpx.ConnectError:
-            logging.error("Cannot reach provider backend for %s", context)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Provider service is currently unreachable. Please try again later.",
-            )
         except Exception as error:
             logging.error("Unexpected error in ProviderService.select_plan: %s", error)
             raise HTTPException(
@@ -208,30 +251,16 @@ class ProviderService:
         """Call the provider backend to save selected add-ons for a plan."""
 
         context = f"update_add_ons {selected_plan_id} for transaction {transaction_id}"
-        provider_backend_url = _get_provider_backend_url()
-        logging.info(
-            "Calling provider backend: %s | base_url=%s",
-            context,
-            provider_backend_url,
-        )
-
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{provider_backend_url}/v1/quotes/{transaction_id}/select-add-ons/{selected_plan_id}",
-                    json={"selected_add_ons": selected_add_ons},
-                    headers=_get_auth_headers(),
-                    timeout=10.0,
-                )
-            return _handle_provider_response(response, context)
+            return await self._send_request(
+                method="POST",
+                endpoint_path=f"/v1/quotes/{transaction_id}/select-add-ons/{selected_plan_id}",
+                context=context,
+                json_body={"selected_add_ons": selected_add_ons},
+                timeout_seconds=10.0,
+            )
         except HTTPException:
             raise
-        except httpx.ConnectError:
-            logging.error("Cannot reach provider backend for %s", context)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Provider service is currently unreachable. Please try again later.",
-            )
         except Exception as error:
             logging.error("Unexpected error in ProviderService.update_add_ons: %s", error)
             raise HTTPException(
@@ -248,34 +277,20 @@ class ProviderService:
         """Call the provider backend to create a payment record."""
 
         context = f"create_payment for transaction {transaction_id}"
-        provider_backend_url = _get_provider_backend_url()
-        logging.info(
-            "Calling provider backend: %s | base_url=%s",
-            context,
-            provider_backend_url,
-        )
-
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{provider_backend_url}/v1/payments",
-                    json={
-                        "transaction_id": transaction_id,
-                        "user_id": user_id,
-                        "amount": amount,
-                    },
-                    headers=_get_auth_headers(),
-                    timeout=10.0,
-                )
-            return _handle_provider_response(response, context)
+            return await self._send_request(
+                method="POST",
+                endpoint_path="/v1/payments",
+                context=context,
+                json_body={
+                    "transaction_id": transaction_id,
+                    "user_id": user_id,
+                    "amount": amount,
+                },
+                timeout_seconds=10.0,
+            )
         except HTTPException:
             raise
-        except httpx.ConnectError:
-            logging.error("Cannot reach provider backend for %s", context)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Provider service is currently unreachable. Please try again later.",
-            )
         except Exception as error:
             logging.error("Unexpected error in ProviderService.create_payment: %s", error)
             raise HTTPException(
@@ -287,29 +302,15 @@ class ProviderService:
         """Call the provider backend to generate a payment OTP."""
 
         context = f"send_payment_otp for payment reference {payment_reference}"
-        provider_backend_url = _get_provider_backend_url()
-        logging.info(
-            "Calling provider backend: %s | base_url=%s",
-            context,
-            provider_backend_url,
-        )
-
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{provider_backend_url}/v1/payments/{payment_reference}/send-otp",
-                    headers=_get_auth_headers(),
-                    timeout=10.0,
-                )
-            return _handle_provider_response(response, context)
+            return await self._send_request(
+                method="POST",
+                endpoint_path=f"/v1/payments/{payment_reference}/send-otp",
+                context=context,
+                timeout_seconds=10.0,
+            )
         except HTTPException:
             raise
-        except httpx.ConnectError:
-            logging.error("Cannot reach provider backend for %s", context)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Provider service is currently unreachable. Please try again later.",
-            )
         except Exception as error:
             logging.error("Unexpected error in ProviderService.send_payment_otp: %s", error)
             raise HTTPException(
@@ -326,34 +327,20 @@ class ProviderService:
         """Call the provider backend to verify a payment OTP."""
 
         context = f"verify_payment_otp for transaction {transaction_id}"
-        provider_backend_url = _get_provider_backend_url()
-        logging.info(
-            "Calling provider backend: %s | base_url=%s",
-            context,
-            provider_backend_url,
-        )
-
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{provider_backend_url}/v1/payments/verify-otp",
-                    json={
-                        "transaction_id": transaction_id,
-                        "payment_reference": payment_reference,
-                        "otp": otp,
-                    },
-                    headers=_get_auth_headers(),
-                    timeout=10.0,
-                )
-            return _handle_provider_response(response, context)
+            return await self._send_request(
+                method="POST",
+                endpoint_path="/v1/payments/verify-otp",
+                context=context,
+                json_body={
+                    "transaction_id": transaction_id,
+                    "payment_reference": payment_reference,
+                    "otp": otp,
+                },
+                timeout_seconds=10.0,
+            )
         except HTTPException:
             raise
-        except httpx.ConnectError:
-            logging.error("Cannot reach provider backend for %s", context)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Provider service is currently unreachable. Please try again later.",
-            )
         except Exception as error:
             logging.error("Unexpected error in ProviderService.verify_payment_otp: %s", error)
             raise HTTPException(
@@ -365,29 +352,15 @@ class ProviderService:
         """Call the provider backend to fetch payment status details."""
 
         context = f"get_payment_status for payment reference {payment_reference}"
-        provider_backend_url = _get_provider_backend_url()
-        logging.info(
-            "Calling provider backend: %s | base_url=%s",
-            context,
-            provider_backend_url,
-        )
-
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{provider_backend_url}/v1/payments/{payment_reference}/status",
-                    headers=_get_auth_headers(),
-                    timeout=10.0,
-                )
-            return _handle_provider_response(response, context)
+            return await self._send_request(
+                method="GET",
+                endpoint_path=f"/v1/payments/{payment_reference}/status",
+                context=context,
+                timeout_seconds=10.0,
+            )
         except HTTPException:
             raise
-        except httpx.ConnectError:
-            logging.error("Cannot reach provider backend for %s", context)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Provider service is currently unreachable. Please try again later.",
-            )
         except Exception as error:
             logging.error("Unexpected error in ProviderService.get_payment_status: %s", error)
             raise HTTPException(

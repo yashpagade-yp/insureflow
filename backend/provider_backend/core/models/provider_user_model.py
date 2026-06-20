@@ -75,6 +75,7 @@ class ProviderUser(Model):
     These users authenticate with email, password, and OTP before accessing the
     provider admin frontend. The same admin can manage provider companies,
     broker registration, plans, quotes, payments, and provider-side operations.
+    These identities are separate from customer-app admins in the main backend.
 
     Attributes:
         first_name: Admin user's given name.

@@ -29,8 +29,8 @@ from pipecat.pipeline.runner import PipelineRunner
 # Groq LLM — OpenAI-compatible, very fast inference
 from pipecat.services.groq.llm import GroqLLMService
 
-# Context management — OpenAI format (Groq is OpenAI-compatible)
-from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
+# Context management — OpenAI-compatible conversation context for Groq
+from pipecat.processors.aggregators.llm_context import LLMContext
 
 # WebSocket transport — text in, text out, no audio
 from pipecat.transports.websocket.fastapi import (
@@ -84,7 +84,7 @@ async def run_chatbot(websocket) -> None:
         {"role": "user", "content": "Hello, I'm here."},
     ]
 
-    context = OpenAILLMContext(messages=initial_messages, tools=TOOLS)
+    context = LLMContext(messages=initial_messages, tools=TOOLS)
 
     # create_context_aggregator gives us user + assistant aggregators in one call
     context_aggregator = llm.create_context_aggregator(context)

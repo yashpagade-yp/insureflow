@@ -184,6 +184,10 @@ class PaymentController:
                 verified_at=None,
             )
             await self.payment_crud.save_payment_otp(payment, payment_otp)
+            self._log_payment_otp_banner(
+                payment_reference=normalized_payment_reference,
+                plain_otp=plain_otp,
+            )
             logging.info(
                 "Payment OTP generated successfully for payment reference %s",
                 normalized_payment_reference,
@@ -267,13 +271,15 @@ class PaymentController:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Payment OTP has not been generated yet.",
                 )
+            payment_otp = payment.payment_otp
 
             now = datetime.now(timezone.utc)
-            payment.payment_otp = self._reset_payment_attempt_window_if_needed(
-                payment.payment_otp,
+            payment_otp = self._reset_payment_attempt_window_if_needed(
+                payment_otp,
                 now,
             )
-            if payment.payment_otp.expires_at < now:
+            payment.payment_otp = payment_otp
+            if payment_otp.expires_at < now:
                 logging.warning(
                     "Expired payment OTP used for payment reference %s",
                     normalized_payment_reference,
@@ -283,7 +289,7 @@ class PaymentController:
                     detail="Payment OTP has expired. Please request a new OTP.",
                 )
 
-            if payment.payment_otp.attempt_count >= MAX_OTP_ATTEMPTS:
+            if payment_otp.attempt_count >= MAX_OTP_ATTEMPTS:
                 logging.warning(
                     "Maximum payment OTP attempts exceeded for payment reference %s",
                     normalized_payment_reference,
@@ -294,9 +300,10 @@ class PaymentController:
                     detail="Maximum payment OTP verification attempts exceeded. Please request a new payment session.",
                 )
 
-            if not verify_hashed_otp(normalized_otp, payment.payment_otp.code_hash):
-                payment.payment_otp.attempt_count += 1
-                await self.payment_crud.save_payment_otp(payment, payment.payment_otp)
+            if not verify_hashed_otp(normalized_otp, payment_otp.code_hash):
+                payment_otp.attempt_count += 1
+                payment.payment_otp = payment_otp
+                await self.payment_crud.save_payment_otp(payment, payment_otp)
                 logging.warning(
                     "Invalid payment OTP submitted for payment reference %s",
                     normalized_payment_reference,
@@ -306,10 +313,11 @@ class PaymentController:
                     detail="Invalid payment OTP.",
                 )
 
-            payment.payment_otp.verified_at = now
-            await self.payment_crud.save_payment_otp(payment, payment.payment_otp)
+            payment_otp.verified_at = now
+            payment.payment_otp = payment_otp
+            await self.payment_crud.save_payment_otp(payment, payment_otp)
             payment = await self.payment_crud.mark_success(payment)
-            verified_at = payment.payment_otp.verified_at
+            verified_at = payment_otp.verified_at
             if verified_at is None:
                 logging.error(
                     "Payment OTP verification timestamp missing for payment reference %s",
@@ -403,6 +411,17 @@ class PaymentController:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to fetch payment status.",
             )
+
+    def _log_payment_otp_banner(self, payment_reference: str, plain_otp: str) -> None:
+        """Emit a high-visibility development log for payment OTP lookup."""
+
+        logging.warning(" ")
+        logging.warning("==============================================")
+        logging.warning("PAYMENT OTP READY | provider_backend | DEV ONLY")
+        logging.warning("Payment reference: %s", payment_reference)
+        logging.warning("Payment OTP: %s", plain_otp)
+        logging.warning("==============================================")
+        logging.warning(" ")
 
     async def list_payments(self) -> PaymentListResponse:
         """Return all provider payment records for the admin dashboard."""

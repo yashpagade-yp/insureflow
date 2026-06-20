@@ -125,7 +125,9 @@ function CustomerDashboardPage() {
 
     try {
       if (!latestSupportTransactionId) {
-        throw new Error("No active or recent policy journey is available for ticket creation right now.");
+        throw new Error(
+          "No active or recent policy journey is available for ticket creation right now."
+        );
       }
 
       await createTicket(session.userId, {
@@ -166,15 +168,31 @@ function CustomerDashboardPage() {
   }
 
   return (
-    <div className="page-stack">
-      <header className="page-header page-header-tight">
-        <p className="eyebrow-text">My insurance account</p>
-        <h2>Resume your journey, access issued policies, and get support when you need it.</h2>
-        <p className="page-copy">
-          This customer dashboard is focused only on your active insurance journey,
-          completed policy purchases, and support needs.
-        </p>
-      </header>
+    <div className="page-stack customer-dashboard-page">
+      <section className="dashboard-hero-card">
+        <div>
+          <p className="eyebrow-text">My insurance account</p>
+          <h2>Stay on top of your policy journey, purchases, and support requests.</h2>
+          <p className="page-copy">
+            This dashboard is focused on only what matters to the customer:
+            active progress, issued policies, and help when you need it.
+          </p>
+        </div>
+
+        <div className="dashboard-hero-actions">
+          <button
+            type="button"
+            className="primary-button"
+            onClick={refreshCustomerData}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? "Refreshing..." : "Refresh account"}
+          </button>
+          <Link to="/customer/app/quotes" className="secondary-button">
+            Open purchase journey
+          </Link>
+        </div>
+      </section>
 
       <div className="stats-grid">
         <StatCard
@@ -192,34 +210,33 @@ function CustomerDashboardPage() {
           value={openTickets.length}
           helper="Support requests still waiting for resolution"
         />
+        <StatCard
+          label="Transactions"
+          value={transactions.length}
+          helper="Insurance journeys linked to your account"
+        />
       </div>
 
       {status.message ? (
-        <div className={status.type === "error" ? "alert-box alert-error" : "alert-box alert-success"}>
+        <div
+          className={
+            status.type === "error" ? "alert-box alert-error" : "alert-box alert-success"
+          }
+        >
           {status.message}
         </div>
       ) : null}
 
       <SectionCard
         title="My account overview"
-        subtitle="Refresh your latest purchase progress, policy records, and ticket status in one action."
-        actions={
-          <button
-            type="button"
-            className="primary-button"
-            onClick={refreshCustomerData}
-            disabled={isRefreshing}
-          >
-            {isRefreshing ? "Refreshing..." : "Refresh account"}
-          </button>
-        }
+        subtitle="Check your latest journey progress, policy records, and next best action."
       >
         {resumeJourney ? (
           <div className="highlight-strip">
             <div>
-              <strong>Resume journey</strong>
+              <strong>Resume your saved application</strong>
               <p className="muted-copy">
-                Continue from your latest saved step: {resumeJourney.form_step || "Saved progress"}
+                Latest saved step: {resumeJourney.form_step || "Saved progress"}
               </p>
             </div>
             <Link
@@ -242,10 +259,13 @@ function CustomerDashboardPage() {
         )}
       </SectionCard>
 
-      <div className="content-grid">
-        <SectionCard title="Issued policies" subtitle="Policies that are already purchased and available in your account.">
+      <div className="content-grid content-grid-wide">
+        <SectionCard
+          title="Issued policies"
+          subtitle="Policies already purchased and available in your account."
+        >
           <div className="stacked-fields">
-            <div className="inline-form">
+            <div className="inline-form inline-form-compact">
               <input
                 className="field-input"
                 value={policyLookup}
@@ -259,21 +279,33 @@ function CustomerDashboardPage() {
 
             {selectedPolicy ? (
               <div className="info-panel">
-                <p><strong>Plan:</strong> {selectedPolicy.plan_name}</p>
-                <p><strong>Company:</strong> {selectedPolicy.company_name}</p>
-                <p><strong>Status:</strong> {selectedPolicy.policy_status}</p>
-                <p><strong>Total premium:</strong> {formatCurrency(selectedPolicy.total_premium)}</p>
+                <p>
+                  <strong>Plan:</strong> {selectedPolicy.plan_name}
+                </p>
+                <p>
+                  <strong>Company:</strong> {selectedPolicy.company_name}
+                </p>
+                <p>
+                  <strong>Status:</strong> {selectedPolicy.policy_status}
+                </p>
+                <p>
+                  <strong>Total premium:</strong> {formatCurrency(selectedPolicy.total_premium)}
+                </p>
                 {selectedPolicy.pdf_url ? (
                   <a
                     className="text-link"
-                    href={`${import.meta.env.VITE_MAIN_API_BASE_URL ?? "http://127.0.0.1:8000"}${selectedPolicy.pdf_url}`}
+                    href={`${
+                      import.meta.env.VITE_MAIN_API_BASE_URL ?? "http://127.0.0.1:8000"
+                    }${selectedPolicy.pdf_url}`}
                     target="_blank"
                     rel="noreferrer"
                   >
-                    Open policy PDF →
+                    Open policy PDF
                   </a>
                 ) : (
-                  <p><strong>PDF:</strong> Not available yet</p>
+                  <p>
+                    <strong>PDF:</strong> Not available yet
+                  </p>
                 )}
               </div>
             ) : null}
@@ -289,18 +321,28 @@ function CustomerDashboardPage() {
                   <article key={policy.policy_number} className="mini-card">
                     <p className="eyebrow-text">{policy.company_name}</p>
                     <h4>{policy.plan_name}</h4>
-                    <p><strong>Policy:</strong> {policy.policy_number}</p>
-                    <p><strong>Status:</strong> {policy.policy_status}</p>
-                    <p><strong>Total:</strong> {formatCurrency(policy.total_premium)}</p>
-                    <p><strong>Issued:</strong> {formatDateTime(policy.issued_at)}</p>
+                    <p>
+                      <strong>Policy:</strong> {policy.policy_number}
+                    </p>
+                    <p>
+                      <strong>Status:</strong> {policy.policy_status}
+                    </p>
+                    <p>
+                      <strong>Total:</strong> {formatCurrency(policy.total_premium)}
+                    </p>
+                    <p>
+                      <strong>Issued:</strong> {formatDateTime(policy.issued_at)}
+                    </p>
                     {policy.pdf_url ? (
                       <a
                         className="text-link"
-                        href={`${import.meta.env.VITE_MAIN_API_BASE_URL ?? "http://127.0.0.1:8000"}${policy.pdf_url}`}
+                        href={`${
+                          import.meta.env.VITE_MAIN_API_BASE_URL ?? "http://127.0.0.1:8000"
+                        }${policy.pdf_url}`}
                         target="_blank"
                         rel="noreferrer"
                       >
-                        View policy PDF →
+                        View policy PDF
                       </a>
                     ) : null}
                   </article>
@@ -310,7 +352,10 @@ function CustomerDashboardPage() {
           </div>
         </SectionCard>
 
-        <SectionCard title="Raise a support ticket" subtitle="Tell us the issue type and describe what went wrong.">
+        <SectionCard
+          title="Raise a support ticket"
+          subtitle="Describe the issue clearly so our team can help faster."
+        >
           <form className="stacked-fields" onSubmit={handleCreateTicket}>
             <input
               className="field-input"
@@ -344,7 +389,10 @@ function CustomerDashboardPage() {
         </SectionCard>
       </div>
 
-      <SectionCard title="My tickets" subtitle="Track existing tickets and add more details to an open request if needed.">
+      <SectionCard
+        title="My tickets"
+        subtitle="Track existing tickets and add more details to an open request if needed."
+      >
         {tickets.length === 0 ? (
           <EmptyState
             title="No tickets raised yet"
@@ -375,7 +423,7 @@ function CustomerDashboardPage() {
           </div>
         )}
 
-        <form className="inline-form" onSubmit={handleUpdateTicket}>
+        <form className="inline-form inline-form-compact" onSubmit={handleUpdateTicket}>
           <input
             className="field-input"
             value={ticketUpdate.ticketId}

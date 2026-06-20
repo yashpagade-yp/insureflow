@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
 
+from commons.email import send_policy_document_email
 from commons.logger import logger
 from core.apis.schemas.response_schema.policy_response_schema import (
     PolicyAddOnResponse,
@@ -14,6 +16,7 @@ from core.apis.schemas.response_schema.policy_response_schema import (
     PolicyPdfResponse,
     PolicyResponse,
 )
+from core.cruds.insurance_detail_crud import InsuranceDetailCrud
 from core.cruds.policy_crud import PolicyCrud
 from core.cruds.transaction_crud import TransactionCrud
 from core.models.policy_model import PolicyAddOn, PolicyModel, generate_policy_number
@@ -30,6 +33,7 @@ class PolicyController:
         """Initialise the controller with its CRUD dependencies."""
 
         self.policy_crud = PolicyCrud()
+        self.insurance_detail_crud = InsuranceDetailCrud()
         self.transaction_crud = TransactionCrud()
         self.policy_document_service = PolicyDocumentService()
 
@@ -155,6 +159,14 @@ class PolicyController:
                     transaction,
                     TransactionStatus.PURCHASED,
                 )
+
+            await self._send_policy_email_if_available(
+                transaction_id=normalized_transaction_id,
+                policy_number=policy.policy_number,
+                company_name=policy.company_name,
+                plan_name=policy.plan_name,
+                pdf_url=policy.pdf_url,
+            )
 
             logging.info(
                 "Policy issued successfully for transaction %s",
@@ -353,6 +365,54 @@ class PolicyController:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to list policies.",
+            )
+
+    async def _send_policy_email_if_available(
+        self,
+        transaction_id: str,
+        policy_number: str,
+        company_name: str,
+        plan_name: str,
+        pdf_url: str | None,
+    ) -> None:
+        """Send a generated policy PDF by email when the journey has an email."""
+
+        try:
+            insurance_detail = await self.insurance_detail_crud.get_by_transaction_id(
+                transaction_id
+            )
+            recipient_email = (
+                insurance_detail.proposer_email.strip()
+                if insurance_detail is not None and insurance_detail.proposer_email
+                else ""
+            )
+            if not recipient_email:
+                logging.info(
+                    "Skipping policy email for transaction %s because proposer email is missing",
+                    transaction_id,
+                )
+                return
+
+            attachment_path = None
+            if pdf_url:
+                relative_path = pdf_url.removeprefix("/")
+                file_path = Path(__file__).resolve().parents[2] / relative_path
+                if file_path.exists():
+                    attachment_path = str(file_path)
+
+            send_policy_document_email(
+                recipient_email=recipient_email,
+                policy_number=policy_number,
+                company_name=company_name,
+                plan_name=plan_name,
+                pdf_file_path=attachment_path,
+                pdf_url=pdf_url,
+            )
+        except Exception as error:
+            logging.error(
+                "Failed to send issued policy email for transaction %s: %s",
+                transaction_id,
+                error,
             )
 
     def _build_policy_response(self, policy: PolicyModel) -> PolicyResponse:

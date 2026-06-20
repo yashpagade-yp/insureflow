@@ -2,7 +2,7 @@
 
 ## What Is InsureFlow?
 
-InsureFlow is an insurance management platform that connects customers with insurance provider companies through a mediator company such as InsureFlow. It helps customers explore insurance options, receive quotes, select plans, make payments, and receive policy documents through a structured digital flow.
+InsureFlow is an insurance management platform that connects customers with insurance provider companies through buyer or mediator companies such as InsureFlow. It helps customers explore insurance options, receive quotes, select plans, make payments, and receive policy documents through a structured digital flow.
 
 In short, InsureFlow acts as the bridge between customers and insurance provider companies. It manages the customer journey on one side and communicates with the provider side on the other side.
 
@@ -25,8 +25,8 @@ monitoring users, transactions, forms, policies, and support issues.
 
 The provider admin frontend is a separate admin-facing application used only by
 authenticated admin users. This frontend is used to manage provider companies,
-register the InsureFlow broker/mediator entry, manage plans, and access
-provider-side administrative operations.
+manage buyer companies, manage plans, and access provider-side
+administrative operations.
 
 ### Main Backend
 
@@ -35,7 +35,7 @@ The main backend is for the InsureFlow company. It handles customer journeys, us
 ### Provider Backend
 
 The provider backend is for the provider-side administrative and integration
-layer. It handles provider-admin authentication, provider companies, mediator
+layer. It handles provider-admin authentication, provider companies, buyer
 company registration, insurance plans, quotes, payment-related provider
 operations, and secure API-key-based communication.
 
@@ -85,24 +85,31 @@ InsureFlow helps manage the complete insurance purchase journey:
 
 ### Admin Flow
 
-1. Admin logs in using email and password.
-2. The customer frontend admin view lets the admin monitor users,
+1. The customer-app admin logs in using email and password.
+2. The customer frontend admin view lets the customer-app admin monitor users,
    transactions, pending forms, completed forms, policies, and customer issues.
-3. The provider admin frontend is separate and requires its own provider-side
+3. The customer-app admin belongs only to the main backend and customer-side
+   operations.
+4. The provider admin frontend is separate and requires its own provider-side
    admin login using email, password, and OTP.
-4. Through the provider admin frontend, admin creates and updates insurance
+5. The provider admin belongs only to the provider backend and provider-side
+   operations.
+6. Through the provider admin frontend, admin creates and updates insurance
    plans in the provider backend.
-5. Admin registers insurance provider companies in the provider backend.
-6. Admin also registers mediator companies like InsureFlow or similar
-   companies that connect customers with insurance providers.
-7. During company registration, the provider backend generates an API key.
-8. The plain API key is shared once with the registered mediator company.
-9. Only the hashed version of that API key is stored in the provider backend.
-10. Future request-response communication between the mediator company and the
+7. Admin registers insurance provider companies in the provider backend.
+8. Admin also creates and registers buyer companies such as InsureFlow or
+   similar mediator platforms.
+9. During buyer-company registration, the provider backend generates an API key.
+10. The plain API key is shared once with the registered buyer company.
+11. Only the hashed version of that API key is stored in the provider backend.
+12. Future request-response communication between the buyer company and the
     provider backend happens through that API key.
-11. The provider backend verifies the API key securely before allowing
+13. The provider backend verifies the API key securely before allowing
     communication.
-12. Admin can monitor transaction progress, including incomplete journeys that
+14. The provider admin dashboard separates buyer companies and provider
+    companies into their own management areas.
+15. The provider admin can activate or deactivate provider insurance companies.
+16. Admin can monitor transaction progress, including incomplete journeys that
     users may later resume.
 
 ---
@@ -128,39 +135,55 @@ Users can:
 
 ## Admin Role
 
-The admin role is for platform management, customer-side monitoring, and
-provider-side coordination.
+InsureFlow has two separate admin roles.
 
-Admins can:
+### Customer-App Admin
+
+The customer-app admin is for customer-side monitoring and operations in the
+main backend.
+
+Customer-app admins can:
 
 - Log in with email, password, and OTP
 - Use the customer frontend admin view to monitor users, transactions, pending
   forms, policies, and support issues
+- Handle customer-side tickets and operational issues
+
+### Provider Admin
+
+The provider admin is for provider-side setup and administration in the
+provider backend.
+
+Provider admins can:
+
 - Log in separately to the provider admin frontend with email, password, and OTP
 - View users and transactions
 - View multiple transactions created by the same user mobile number
-- Handle support tickets
 - Create and update insurance plans
 - Register insurance provider companies
-- Register mediator companies like InsureFlow
-- Control secure communication between companies through API-key-based access
+- Create and register buyer companies like InsureFlow
+- Activate or deactivate provider insurance companies
+- Control secure communication between buyer companies and provider companies through API-key-based access
 - Manage provider-side administrative operations through the provider backend
+
+These two admins are separate and should not be treated as the same admin
+identity.
 
 ---
 
 ## API Key Communication
 
-The provider backend supports secure communication between InsureFlow-like mediator companies and insurance provider companies.
+The provider backend supports secure communication between buyer companies and insurance provider companies.
 
 When a company is registered:
 
-1. The provider backend generates an API key.
-2. The plain API key is given once to the registered company.
+1. The provider backend generates an API key for a registered buyer company.
+2. The plain API key is given once to the registered buyer company.
 3. The provider backend stores only the hashed version of the API key.
-4. Later, whenever the mediator company sends a request, the API key is verified.
+4. Later, whenever the buyer company sends a request, the API key is verified.
 5. If the key is valid, request-response communication is allowed securely.
 
-This makes InsureFlow a controlled and secure mediator platform between customers and insurance provider companies.
+This makes InsureFlow a controlled and secure buyer platform between customers and insurance provider companies.
 
 ## OTP Usage
 

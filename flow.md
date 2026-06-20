@@ -84,7 +84,8 @@
         - Password
         - OTP (sent to admin email — real OTP, not mock)
 3.  Admin JWT token is issued
-4.  Admin can monitor:
+4.  This admin belongs only to the customer app / `main_backend`
+5.  Admin can monitor:
         a. Customers
                - List all customers
                - View customer profile
@@ -104,6 +105,8 @@
                - View support tickets
                - Respond to customer issues
 ```
+
+This admin flow is separate from the provider admin flow.
 
 ---
 
@@ -130,7 +133,8 @@
 | Verify admin OTP              | main_backend    | `POST /v1/admins/login/verify`                  | None     |
 | List plans (for quotes)       | provider_backend| `GET /v1/plans/`                                | None     |
 | Get plan detail               | provider_backend| `GET /v1/plans/{plan_id}`                       | None     |
-| List companies                | provider_backend| `GET /v1/companies/`                            | None     |
+| List buyer companies          | provider_backend| `GET /v1/buyer-companies/`                      | Admin JWT|
+| List provider companies       | provider_backend| `GET /v1/provider-companies/`                   | Admin JWT|
 
 ---
 
@@ -150,4 +154,4 @@
 | CLI        | Done        | Full customer flow (new + returning + resume)  |
 | MCP Server | Done        | 14 tools, Streamable HTTP on port 8080         |
 | ngrok URL  | Pending     | To be added to MCP config when available       |
-| Admin Flow | Not started | Deferred — only customer journey in scope now  |
+| Admin Flow | Not started | Customer-app admin only; separate from provider admin |

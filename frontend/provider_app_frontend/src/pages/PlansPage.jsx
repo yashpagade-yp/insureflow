@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import EmptyState from "../components/EmptyState";
 import SectionCard from "../components/SectionCard";
-import { createPlan, listCompanies, listPlans } from "../lib/api";
+import { createPlan, listPlans, listProviderCompanies } from "../lib/api";
 
 const initialAddOn = {
   name: "",
@@ -42,12 +42,10 @@ function PlansPage() {
       try {
         const [plansResponse, companiesResponse] = await Promise.all([
           listPlans(),
-          listCompanies(),
+          listProviderCompanies(),
         ]);
 
-        const providers = (companiesResponse.items ?? []).filter(
-          (item) => item.company_type === "provider"
-        );
+        const providers = companiesResponse.items ?? [];
 
         setPlans(plansResponse.items ?? []);
         setProviderCompanies(providers);
@@ -165,6 +163,15 @@ function PlansPage() {
 
   return (
     <div className="page-stack">
+      <section className="command-subhero">
+        <p className="eyebrow-text">Plan studio</p>
+        <h2>Publish products that the quote engine can trust instantly.</h2>
+        <p className="muted-copy">
+          Configure provider plans with cleaner structure, stronger pricing clarity,
+          and rider-ready product details for operational teams.
+        </p>
+      </section>
+
       {status.message ? (
         <div className={status.type === "error" ? "alert-box alert-error" : "alert-box alert-success"}>
           {status.message}

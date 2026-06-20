@@ -43,8 +43,8 @@ from pipecat.services.groq.llm import GroqLLMService
 # TTS — converts text response to voice
 from pipecat.services.cartesia.tts import CartesiaTTSService
 
-# Context management — OpenAI format (Groq is OpenAI-compatible)
-from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
+# Context management — OpenAI-compatible conversation context for Groq
+from pipecat.processors.aggregators.llm_context import LLMContext
 
 # SmallWebRTC transport — browser WebRTC without needing Daily.co
 from pipecat.transports.smallwebrtc.transport import (
@@ -125,7 +125,7 @@ async def run_voicebot(webrtc_connection) -> None:
         },
     ]
 
-    context = OpenAILLMContext(messages=initial_messages, tools=TOOLS)
+    context = LLMContext(messages=initial_messages, tools=TOOLS)
     context_aggregator = llm.create_context_aggregator(context)
 
     # ── Pipeline ──────────────────────────────────────────────────────────────
