@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
-const BOT_URL = "http://localhost:8002/api/chat";
+const BOT_BASE_URL = import.meta.env.VITE_BOT_BASE_URL ?? "http://localhost:8002";
+const BOT_URL = `${BOT_BASE_URL}/api/chat`;
 
 const quickPrompts = [
   "Show me health insurance plans for a family.",

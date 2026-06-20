@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
-const OFFER_URL = "http://localhost:8002/voice/offer";
-const ICE_URL = "http://localhost:8002/voice/ice";
+const BOT_BASE_URL = import.meta.env.VITE_BOT_BASE_URL ?? "http://localhost:8002";
+const OFFER_URL = `${BOT_BASE_URL}/voice/offer`;
+const ICE_URL = `${BOT_BASE_URL}/voice/ice`;
 
 const STATUS = {
   IDLE: "idle",

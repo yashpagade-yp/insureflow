@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import List, Optional
 from uuid import uuid4
 
 from odmantic import Field, Model
@@ -78,7 +79,7 @@ class RecommendedPlanSnapshot(BaseModel):
     plan_name: str = PydanticField(..., description="Recommended plan name")
     coverage_amount: float = PydanticField(..., ge=0, description="Coverage amount on the plan")
     total_premium: float = PydanticField(..., ge=0, description="Total premium on the plan")
-    add_on_summary: str | None = PydanticField(
+    add_on_summary: Optional[str] = PydanticField(
         default=None,
         description="Short spoken add-on summary for the plan",
     )
@@ -128,14 +129,14 @@ class CallingBotCall(Model):
         unique=True,
         description="Stable UUID reference for one calling-bot session",
     )
-    call_sid: str | None = Field(
+    call_sid: Optional[str] = Field(
         default=None,
         unique=True,
         description="Twilio call SID once the outbound call is created",
     )
     customer_name: str = Field(..., description="Name used for the call target")
     customer_phone: str = Field(..., description="Destination mobile number dialled by the bot")
-    customer_email: str | None = Field(
+    customer_email: Optional[str] = Field(
         default=None,
         description="Optional customer email linked to the journey",
     )
@@ -155,52 +156,52 @@ class CallingBotCall(Model):
         default=CustomerInterestStatus.UNKNOWN,
         description="Whether the customer wants to continue the purchase journey",
     )
-    desired_coverage_amount: float | None = Field(
+    desired_coverage_amount: Optional[float] = Field(
         default=None,
         ge=0,
         description="Coverage amount captured during the call",
     )
-    transcript_lines: list[str] = Field(
+    transcript_lines: List[str] = Field(
         default_factory=list,
         description="Lightweight transcript or event log for the call",
     )
-    recommended_plans: list[RecommendedPlanSnapshot] = Field(
+    recommended_plans: List[RecommendedPlanSnapshot] = Field(
         default_factory=list,
         description="Plans recommended during the voice-flow",
     )
-    transaction_id: str | None = Field(
+    transaction_id: Optional[str] = Field(
         default=None,
         description="Linked customer journey transaction identifier",
     )
-    user_id: str | None = Field(
+    user_id: Optional[str] = Field(
         default=None,
         description="Linked user identifier created during the journey",
     )
-    selected_plan_id: str | None = Field(
+    selected_plan_id: Optional[str] = Field(
         default=None,
         description="Selected provider plan identifier",
     )
-    selected_plan_name: str | None = Field(
+    selected_plan_name: Optional[str] = Field(
         default=None,
         description="Selected provider plan name",
     )
-    provider_company_name: str | None = Field(
+    provider_company_name: Optional[str] = Field(
         default=None,
         description="Provider company chosen for the final policy",
     )
-    payment_reference: str | None = Field(
+    payment_reference: Optional[str] = Field(
         default=None,
         description="Payment reference created during purchase",
     )
-    payment_status: str | None = Field(
+    payment_status: Optional[str] = Field(
         default=None,
         description="Latest payment status recorded on the call",
     )
-    policy_number: str | None = Field(
+    policy_number: Optional[str] = Field(
         default=None,
         description="Issued policy number after a successful purchase",
     )
-    policy_pdf_url: str | None = Field(
+    policy_pdf_url: Optional[str] = Field(
         default=None,
         description="Generated policy PDF URL after purchase completion",
     )
@@ -208,7 +209,7 @@ class CallingBotCall(Model):
         default=PolicyEmailStatus.NOT_TRIGGERED,
         description="Policy-email delivery state for the call flow",
     )
-    duration_seconds: int | None = Field(
+    duration_seconds: Optional[int] = Field(
         default=None,
         ge=0,
         description="Completed call duration in seconds",
@@ -221,15 +222,15 @@ class CallingBotCall(Model):
         ...,
         description="Admin email used to trigger the outbound call",
     )
-    from_number: str | None = Field(
+    from_number: Optional[str] = Field(
         default=None,
         description="Twilio outbound caller id used for the call",
     )
-    summary: str | None = Field(
+    summary: Optional[str] = Field(
         default=None,
         description="Human-readable call summary for the frontend",
     )
-    last_error: str | None = Field(
+    last_error: Optional[str] = Field(
         default=None,
         description="Optional last error message stored on the call",
     )
@@ -241,7 +242,7 @@ class CallingBotCall(Model):
         default_factory=lambda: datetime.now(timezone.utc),
         description="Timestamp when the call record was last updated",
     )
-    completed_at: datetime | None = Field(
+    completed_at: Optional[datetime] = Field(
         default=None,
         description="Timestamp when the call or purchase flow completed",
     )

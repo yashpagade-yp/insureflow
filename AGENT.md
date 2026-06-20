@@ -32,6 +32,17 @@ The reusable backend skill references live in:
 These files define the detailed coding rules and the reference implementation
 style that all backend changes should follow.
 
+## Eigi Skills
+
+Use `.codex/skills/eigi-backend-standards` for shared backend API standards.
+It guides route, controller, CRUD, service, schema, model, logging, docstring,
+test, and backend `.gitignore` conventions.
+Use `.codex/skills/eigi-frontend-standards` for shared frontend web-app
+standards. It guides route/page, feature component, shared UI, API client,
+hook/store, styling, test, env, and frontend `.gitignore` conventions.
+Inspect nearby code first and follow the closest local convention.
+Read the matching `SKILL.md` first and load references only when needed.
+
 ## Tooling Rules
 
 The agent should prefer:
