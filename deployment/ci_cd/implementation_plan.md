@@ -133,7 +133,10 @@ The CI/CD design should cover:
 
 ## Phase 4: Secrets And Configuration
 
-- [ ] Define required GitHub Secrets
+- [x] Define initial GitHub Secrets guidance
+  - Documented current and next-phase secret expectations
+
+- [ ] Define required GitHub Secrets for Docker Hub push phase
   - Docker Hub username
   - Docker Hub token
   - any build-time frontend variables
