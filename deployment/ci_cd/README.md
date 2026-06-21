@@ -71,6 +71,18 @@ Docker Compose restarts the application
 - `github_secrets.md`
   Project-specific guide for which GitHub Secrets are needed now and later.
 
+- `dockerhub_publish.md`
+  Project-specific explanation of the manual Docker Hub publish workflow.
+
+- `github_actions_runbook.md`
+  Practical guide for configuring and running the current GitHub Actions setup.
+
+- `validation_checklist.md`
+  Checklist for deciding when the current CI/CD phase is actually complete.
+
+- `branch_testing_notes.md`
+  Notes about how the current workflows behave with the project's branch flow.
+
 ## Important Notes
 
 - This folder is documentation and planning only for now.

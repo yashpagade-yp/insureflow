@@ -116,7 +116,10 @@ The CI/CD design should cover:
 
 ## Phase 3: CD Design
 
-- [ ] Define Docker Hub login and push process for a later phase
+- [x] Define Docker Hub login and push process
+  - Added a separate manual publish workflow for Docker Hub
+  - Kept image publishing separate from regular development CI
+  - Restricted manual image publishing to `development` and `main`
 
 - [ ] Define server deployment flow later if deployment is introduced
   - pull updated images
@@ -151,6 +154,17 @@ The CI/CD design should cover:
 - [x] Create initial `.github/workflows/` file
   - Added first `development` branch CI workflow
   - Scope is validation and Docker builds only
+
+- [x] Add Docker Hub publish workflow
+  - Added a separate manual workflow for publishing all six images
+  - No deployment step included
+
+- [x] Add GitHub Actions runbook
+  - Documented how to configure secrets and run the current workflows
+
+- [x] Add validation and branch-testing notes
+  - Documented how to decide completion
+  - Documented how workflows should be tested with the current branch strategy
 
 - [ ] Add project-specific deployment workflow later if deployment is introduced
 
