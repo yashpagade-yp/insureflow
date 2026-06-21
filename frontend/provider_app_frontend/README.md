@@ -23,7 +23,7 @@ Provider-side health insurance admin frontend for InsureFlow.
 
 ## Required env
 
-`VITE_PROVIDER_API_BASE_URL=http://127.0.0.1:5200`
+`VITE_PROVIDER_API_BASE_URL=http://localhost:8001`
 
 ## Current pages
 
