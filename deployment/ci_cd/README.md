@@ -68,6 +68,9 @@ Docker Compose restarts the application
 - `implementation_plan.md`
   Step-by-step plan for introducing CI/CD safely.
 
+- `github_secrets.md`
+  Project-specific guide for which GitHub Secrets are needed now and later.
+
 ## Important Notes
 
 - This folder is documentation and planning only for now.

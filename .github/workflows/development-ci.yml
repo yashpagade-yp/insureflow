@@ -6,6 +6,9 @@ on:
       - development
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: development-ci-${{ github.ref }}
   cancel-in-progress: true
@@ -46,10 +49,40 @@ jobs:
         working-directory: ${{ matrix.app.working_directory }}
         run: npm run build
 
+  python-syntax-checks:
+    name: Python Syntax Checks
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: main_backend
+            path: backend/main_backend
+          - name: provider_backend
+            path: backend/provider_backend
+          - name: mcp
+            path: mcp
+          - name: bot
+            path: bot
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Python syntax
+        run: python -m compileall ${{ matrix.service.path }}
+
   docker-image-builds:
     name: Docker Image Builds
     runs-on: ubuntu-latest
-    needs: frontend-build-checks
+    needs:
+      - frontend-build-checks
+      - python-syntax-checks
     strategy:
       fail-fast: false
       matrix:
