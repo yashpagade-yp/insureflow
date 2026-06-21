@@ -39,8 +39,7 @@ Because of that, no secrets are required by the current
 
 ## Expected Secrets For Next Phase
 
-If the next phase adds Docker Hub image publishing, these are the most likely
-secrets we will need:
+The current Docker Hub publish workflow is prepared to use these secrets:
 
 - `DOCKERHUB_USERNAME`
   Docker Hub account username
