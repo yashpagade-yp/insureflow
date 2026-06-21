@@ -1,5 +1,6 @@
 services:
   main_backend:
+    image: yashh2000/insureflow-main-backend:latest
     build:
       context: ./backend/main_backend
     container_name: insureflow-main-backend
@@ -15,6 +16,7 @@ services:
       - provider_backend
 
   provider_backend:
+    image: yashh2000/insureflow-provider-backend:latest
     build:
       context: ./backend/provider_backend
     container_name: insureflow-provider-backend
@@ -24,6 +26,7 @@ services:
       - "8001:8001"
 
   customer_app_frontend:
+    image: yashh2000/insureflow-customer-frontend:latest
     build:
       context: ./frontend/customer_app_frontend
       args:
@@ -37,6 +40,7 @@ services:
       - bot
 
   provider_app_frontend:
+    image: yashh2000/insureflow-provider-frontend:latest
     build:
       context: ./frontend/provider_app_frontend
       args:
@@ -48,6 +52,7 @@ services:
       - provider_backend
 
   mcp:
+    image: yashh2000/insureflow-mcp:latest
     build:
       context: ./mcp
     container_name: insureflow-mcp
@@ -63,6 +68,7 @@ services:
       - provider_backend
 
   bot:
+    image: yashh2000/insureflow-bot:latest
     build:
       context: ./bot
     container_name: insureflow-bot

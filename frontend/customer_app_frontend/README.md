@@ -23,7 +23,9 @@ Customer-facing and admin-operations frontend for InsureFlow.
 
 ## Required env
 
-`VITE_MAIN_API_BASE_URL=http://127.0.0.1:5100`
+`VITE_MAIN_API_BASE_URL=http://localhost:8000`
+
+`VITE_BOT_BASE_URL=http://localhost:8002`
 
 ## Implemented flows
 
